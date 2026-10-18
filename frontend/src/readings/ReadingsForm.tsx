@@ -2,7 +2,7 @@ import { Button, Flex, Form, message } from 'antd'
 import { useState } from 'react'
 import RiserCard from './RiserCard'
 import { submitReadings } from './readingsApi'
-import type { Riser, RiserValues } from './types'
+import type { ReadingServerError, ReadingToSend, Riser, RiserValues } from './types'
 import { isFilled, normalizeReading } from './validation'
 
 interface FormValues {
@@ -12,30 +12,91 @@ interface FormValues {
 interface Props {
   accountNumber: string
   risers: Riser[]
+  /** Reloads the account after the server answered; resolves to false when the reload failed. */
+  onChanged: () => Promise<boolean>
 }
 
-export default function ReadingsForm({ accountNumber, risers: knownRisers }: Props) {
+type Kind = 'hot' | 'cold'
+
+const ERROR_MESSAGES: Record<string, string> = {
+  VALUE_LESS_THAN_PREVIOUS: 'Показание не может быть меньше предыдущего',
+  INVALID_VALUE: 'Введите число, не более трёх знаков после запятой',
+  METER_NOT_FOUND: 'Счётчик не найден',
+  DUPLICATE_METER: 'Счётчик указан дважды',
+}
+
+export default function ReadingsForm({ accountNumber, risers: knownRisers, onChanged }: Props) {
   const [form] = Form.useForm<FormValues>()
   const [messageApi, contextHolder] = message.useMessage()
   const [sending, setSending] = useState(false)
 
   const initialValues: FormValues = { risers: knownRisers.map(() => ({})) }
 
+  // The filled fields that have a meter, each with the form field it came from.
+  const collect = (risers: RiserValues[]) => {
+    const readings: (ReadingToSend & { field: [number, Kind] })[] = []
+    risers.forEach((values, index) => {
+      for (const kind of ['hot', 'cold'] as const) {
+        const value = values?.[kind]
+        const meter = knownRisers[index]?.[kind]
+        if (isFilled(value) && meter) {
+          readings.push({ meterNumber: meter.number, value: normalizeReading(value), field: [index, kind] })
+        }
+      }
+    })
+    return readings
+  }
+
+  const showServerErrors = (errors: ReadingServerError[], readings: ReturnType<typeof collect>) => {
+    let unmatched = errors.length === 0
+    const fields: { name: ['risers', number, Kind]; errors: string[] }[] = []
+    for (const error of errors) {
+      const reading = readings.find((r) => r.meterNumber === error.meterNumber)
+      const text = ERROR_MESSAGES[error.code]
+      if (reading && text) {
+        fields.push({ name: ['risers', reading.field[0], reading.field[1]], errors: [text] })
+      } else {
+        unmatched = true
+      }
+    }
+    form.setFields(fields)
+    if (unmatched) messageApi.error('Показания не приняты сервером')
+  }
+
   const onFinish = async ({ risers }: FormValues) => {
-    const values = risers.map(({ hot, cold }) => ({
-      hot: isFilled(hot) ? normalizeReading(hot) : undefined,
-      cold: isFilled(cold) ? normalizeReading(cold) : undefined,
-    }))
-    if (!values.some(({ hot, cold }) => hot !== undefined || cold !== undefined)) {
+    const readings = collect(risers)
+    if (readings.length === 0) {
       messageApi.warning('Введите хотя бы одно показание')
       return
     }
     setSending(true)
     try {
-      await submitReadings({ accountNumber, risers: values })
-      messageApi.success('Показания переданы')
-    } catch {
-      messageApi.error('Не удалось отправить показания, попробуйте позже')
+      const result = await submitReadings(
+        accountNumber,
+        readings.map(({ meterNumber, value }) => ({ meterNumber, value })),
+      )
+      switch (result.status) {
+        case 'ok':
+          messageApi.success('Показания переданы')
+          form.resetFields()
+          if (!(await onChanged())) {
+            messageApi.warning('Показания сохранены, но данные на экране не обновились. Обновите страницу')
+          }
+          break
+        case 'invalid':
+          showServerErrors(result.errors, readings)
+          await onChanged()
+          break
+        case 'conflict':
+          messageApi.warning('Показания не сохранены из-за одновременного изменения. Повторите отправку')
+          await onChanged()
+          break
+        case 'not-found':
+          messageApi.error('Лицевой счёт не найден')
+          break
+        default:
+          messageApi.error('Не удалось отправить показания, попробуйте позже')
+      }
     } finally {
       setSending(false)
     }

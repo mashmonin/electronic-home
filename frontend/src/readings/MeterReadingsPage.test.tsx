@@ -106,16 +106,13 @@ describe('MeterReadingsPage', () => {
   })
 
   it('submits valid readings with a comma separator for the loaded account', async () => {
-    const submit = vi.spyOn(api, 'submitReadings').mockResolvedValue()
+    const submit = vi.spyOn(api, 'submitReadings').mockResolvedValue({ status: 'ok' })
     await renderPage()
     const [hot] = screen.getAllByLabelText('Горячая вода, м³')
     fireEvent.change(hot, { target: { value: '250,125' } })
     fireEvent.click(screen.getByRole('button', { name: 'Отправить показания' }))
     expect(await screen.findByText('Показания переданы')).toBeInTheDocument()
-    expect(submit).toHaveBeenCalledWith({
-      accountNumber: '000000000001',
-      risers: [{ hot: '250.125', cold: undefined }],
-    })
+    expect(submit).toHaveBeenCalledWith('000000000001', [{ meterNumber: 'Тест 1', value: '250.125' }])
   })
 
   it('clears values and errors on reset', async () => {
@@ -169,7 +166,7 @@ describe('MeterReadingsPage meters', () => {
 
   it('shows dashes and skips the minimum check for a meter without readings', async () => {
     mockAccount({ ...ACCOUNT, meters: [{ number: 'Г-1', water_type: 'HOT', readings: [] }] })
-    const submit = vi.spyOn(api, 'submitReadings').mockResolvedValue()
+    const submit = vi.spyOn(api, 'submitReadings').mockResolvedValue({ status: 'ok' })
     await renderPage()
     expect(screen.getByText('Счётчик № Г-1')).toBeInTheDocument()
     expect(screen.getAllByText('Пред. показание: —')).toHaveLength(2)

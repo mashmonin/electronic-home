@@ -1,6 +1,6 @@
 import { Form, Input, Typography } from 'antd'
 import type { Meter } from './types'
-import { formatReading, validateReading } from './validation'
+import { formatReading, isFilled, validateReading } from './validation'
 
 interface Props {
   name: [number, 'hot' | 'cold']
@@ -15,6 +15,7 @@ export default function ReadingField({ name, label, meter }: Props) {
       label={label}
       style={{ marginBottom: 0 }}
       rules={[{ validator: async (_, value) => {
+        if (!meter && isFilled(value)) throw new Error('Для этого поля нет счётчика')
         const error = validateReading(value, meter?.previous)
         if (error) throw new Error(error)
       } }]}

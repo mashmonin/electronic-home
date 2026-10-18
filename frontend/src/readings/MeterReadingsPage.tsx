@@ -1,5 +1,5 @@
 import { Alert, Flex, Grid, Layout, Spin, Typography } from 'antd'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import AppHeader from './AppHeader'
 import ContactCard from './ContactCard'
 import ReadingsForm from './ReadingsForm'
@@ -51,6 +51,15 @@ export default function MeterReadingsPage({
     }
   }, [accountNumber])
 
+  // Reloads the account in place (no spinner, the form stays mounted); false when the reload failed.
+  const refresh = useCallback(async () => {
+    if (!accountNumber) return false
+    const result = await fetchAccount(accountNumber)
+    if (result.status !== 'ok') return false
+    setState({ kind: 'ready', account: result.account })
+    return true
+  }, [accountNumber])
+
   if (state.kind === 'loading') {
     return <Spin style={{ display: 'block', margin: '120px auto' }} />
   }
@@ -84,7 +93,12 @@ export default function MeterReadingsPage({
               {MONTHS[today.getMonth()]} {today.getFullYear()} · Передайте показания до {DEADLINE_DAY} числа
             </Typography.Text>
           </div>
-          <ReadingsForm key={account.number} accountNumber={account.number} risers={buildRisers(account.meters)} />
+          <ReadingsForm
+            key={account.number}
+            accountNumber={account.number}
+            risers={buildRisers(account.meters)}
+            onChanged={refresh}
+          />
           <ContactCard />
         </Flex>
       </Layout.Content>
