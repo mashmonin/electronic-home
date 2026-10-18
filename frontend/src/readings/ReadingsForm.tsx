@@ -2,7 +2,7 @@ import { Button, Flex, Form, message } from 'antd'
 import { useState } from 'react'
 import RiserCard from './RiserCard'
 import { submitReadings } from './readingsApi'
-import type { Apartment, RiserValues } from './types'
+import type { Riser, RiserValues } from './types'
 import { isFilled, normalizeReading } from './validation'
 
 interface FormValues {
@@ -10,15 +10,16 @@ interface FormValues {
 }
 
 interface Props {
-  apartment: Apartment
+  accountNumber: string
+  risers: Riser[]
 }
 
-export default function ReadingsForm({ apartment }: Props) {
+export default function ReadingsForm({ accountNumber, risers: knownRisers }: Props) {
   const [form] = Form.useForm<FormValues>()
   const [messageApi, contextHolder] = message.useMessage()
   const [sending, setSending] = useState(false)
 
-  const initialValues: FormValues = { risers: apartment.risers.map(() => ({})) }
+  const initialValues: FormValues = { risers: knownRisers.map(() => ({})) }
 
   const onFinish = async ({ risers }: FormValues) => {
     const values = risers.map(({ hot, cold }) => ({
@@ -31,7 +32,7 @@ export default function ReadingsForm({ apartment }: Props) {
     }
     setSending(true)
     try {
-      await submitReadings({ apartmentId: apartment.id, risers: values })
+      await submitReadings({ accountNumber, risers: values })
       messageApi.success('Показания переданы')
     } catch {
       messageApi.error('Не удалось отправить показания, попробуйте позже')
@@ -47,7 +48,7 @@ export default function ReadingsForm({ apartment }: Props) {
         {(fields, { add }) => (
           <Flex vertical gap={16}>
             {fields.map((field) => (
-              <RiserCard key={field.key} index={field.name} riser={apartment.risers[field.name]} />
+              <RiserCard key={field.key} index={field.name} riser={knownRisers[field.name]} />
             ))}
             <Button
               size="large"

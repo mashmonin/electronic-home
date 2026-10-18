@@ -1,17 +1,25 @@
 import { BellOutlined, HomeOutlined, UserOutlined } from '@ant-design/icons'
-import { Button, Dropdown, Flex, Grid, Layout, Typography } from 'antd'
-import type { Apartment } from './types'
+import { Button, Flex, Grid, Layout, Popover, Typography } from 'antd'
+import type { Account } from './accountApi'
 
 interface Props {
-  apartments: Apartment[]
-  apartment: Apartment
-  onApartmentChange: (id: string) => void
+  account: Account
 }
 
 const ICON_STYLE = { fontSize: 18, color: '#8c8c8c' }
 
-export default function AppHeader({ apartments, apartment, onApartmentChange }: Props) {
+export default function AppHeader({ account }: Props) {
   const wide = Grid.useBreakpoint().md ?? false
+
+  const owners = (
+    <Flex vertical gap={4}>
+      {account.owners.length === 0 ? (
+        <Typography.Text type="secondary">Совладельцы не указаны</Typography.Text>
+      ) : (
+        account.owners.map((owner) => <Typography.Text key={owner.full_name}>{owner.full_name}</Typography.Text>)
+      )}
+    </Flex>
+  )
 
   return (
     <Layout.Header
@@ -37,25 +45,21 @@ export default function AppHeader({ apartments, apartment, onApartmentChange }: 
         </Flex>
         <Flex align="center" gap={18}>
           <BellOutlined aria-label="Уведомления" style={ICON_STYLE} />
-          <UserOutlined aria-label="Профиль" style={ICON_STYLE} />
+          <Popover title="Совладельцы счёта" content={owners} trigger="click" placement="bottomRight">
+            <Button
+              type="text"
+              aria-label="Профиль"
+              icon={<UserOutlined style={ICON_STYLE} />}
+              style={{ padding: 0, width: 20, height: 20 }}
+            />
+          </Popover>
           <HomeOutlined aria-label="Дом" style={ICON_STYLE} />
-          <Dropdown
-            trigger={['click']}
-            menu={{
-              items: apartments.map((a) => ({ key: a.id, label: a.address })),
-              selectedKeys: [apartment.id],
-              onClick: ({ key }) => onApartmentChange(key),
-            }}
-          >
-            <Button type="text" aria-label="Сменить адрес" style={{ height: 'auto', padding: 0 }}>
-              <Flex vertical align="flex-end">
-                <Typography.Text strong>{apartment.address}</Typography.Text>
-                <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                  Лицевой счёт № {apartment.account}
-                </Typography.Text>
-              </Flex>
-            </Button>
-          </Dropdown>
+          <Flex vertical align="flex-end">
+            <Typography.Text strong>{account.address}</Typography.Text>
+            <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+              Лицевой счёт № {account.number}
+            </Typography.Text>
+          </Flex>
         </Flex>
       </Flex>
     </Layout.Header>

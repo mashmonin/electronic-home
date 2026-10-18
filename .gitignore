@@ -47,5 +47,7 @@ frontend/dist/
 .env
 .env.*
 !.env.example
+# Public dev default (no secrets): the account number opened without ?account=
+!frontend/.env.development
 infra/certs/*
 !infra/certs/.gitkeep
