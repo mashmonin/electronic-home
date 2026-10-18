@@ -1,1 +1,7 @@
-databaseChangeLog: []
+databaseChangeLog:
+  - include:
+      file: db/changelog/changes/001-create-housing-tables.yaml
+  - include:
+      file: db/changelog/changes/002-add-is-test-column.yaml
+  - include:
+      file: db/changelog/changes/003-seed-test-data.yaml

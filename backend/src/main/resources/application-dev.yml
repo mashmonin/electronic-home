@@ -1,4 +1,6 @@
 spring:
+  liquibase:
+    contexts: dev
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5435/electronic_home}
     username: ${DB_USER:electronic_home}

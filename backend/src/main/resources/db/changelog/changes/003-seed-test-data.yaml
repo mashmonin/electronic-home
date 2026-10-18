@@ -1,0 +1,127 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-seed-test-owners
+      author: electronic-home
+      context: dev
+      changes:
+        - insert:
+            tableName: owners
+            columns:
+              - column: { name: full_name, value: "Тестовый Тест Тестович" }
+              - column: { name: is_test, valueBoolean: true }
+        - insert:
+            tableName: owners
+            columns:
+              - column: { name: full_name, value: "Тестовая Теста Тестовна" }
+              - column: { name: is_test, valueBoolean: true }
+      rollback:
+        - sql:
+            sql: DELETE FROM owners WHERE is_test
+
+  - changeSet:
+      id: 003-seed-test-addresses
+      author: electronic-home
+      context: dev
+      changes:
+        - insert:
+            tableName: addresses
+            columns:
+              - column: { name: street, value: "ул. Тестовая" }
+              - column: { name: house, value: "Тест" }
+              - column: { name: apartment, value: "1" }
+              - column: { name: is_test, valueBoolean: true }
+        - insert:
+            tableName: addresses
+            columns:
+              - column: { name: street, value: "ул. Тестовая" }
+              - column: { name: house, value: "Тест" }
+              - column: { name: apartment, value: "2" }
+              - column: { name: is_test, valueBoolean: true }
+      rollback:
+        - sql:
+            sql: DELETE FROM addresses WHERE is_test
+
+  - changeSet:
+      id: 003-seed-test-accounts
+      author: electronic-home
+      context: dev
+      changes:
+        - insert:
+            tableName: accounts
+            columns:
+              - column: { name: number, value: "000000000001" }
+              - column:
+                  name: address_id
+                  valueComputed: "(SELECT id FROM addresses WHERE street = 'ул. Тестовая' AND house = 'Тест' AND apartment = '1')"
+              - column: { name: is_test, valueBoolean: true }
+      rollback:
+        - sql:
+            sql: DELETE FROM accounts WHERE is_test
+
+  - changeSet:
+      id: 003-seed-test-address-owners
+      author: electronic-home
+      context: dev
+      changes:
+        - insert:
+            tableName: address_owners
+            columns:
+              - column:
+                  name: address_id
+                  valueComputed: "(SELECT id FROM addresses WHERE street = 'ул. Тестовая' AND house = 'Тест' AND apartment = '1')"
+              - column:
+                  name: owner_id
+                  valueComputed: "(SELECT id FROM owners WHERE full_name = 'Тестовый Тест Тестович' AND is_test)"
+              - column: { name: is_test, valueBoolean: true }
+        - insert:
+            tableName: address_owners
+            columns:
+              - column:
+                  name: address_id
+                  valueComputed: "(SELECT id FROM addresses WHERE street = 'ул. Тестовая' AND house = 'Тест' AND apartment = '1')"
+              - column:
+                  name: owner_id
+                  valueComputed: "(SELECT id FROM owners WHERE full_name = 'Тестовая Теста Тестовна' AND is_test)"
+              - column: { name: is_test, valueBoolean: true }
+        - insert:
+            tableName: address_owners
+            columns:
+              - column:
+                  name: address_id
+                  valueComputed: "(SELECT id FROM addresses WHERE street = 'ул. Тестовая' AND house = 'Тест' AND apartment = '2')"
+              - column:
+                  name: owner_id
+                  valueComputed: "(SELECT id FROM owners WHERE full_name = 'Тестовый Тест Тестович' AND is_test)"
+              - column: { name: is_test, valueBoolean: true }
+      rollback:
+        - sql:
+            sql: DELETE FROM address_owners WHERE is_test
+
+  - changeSet:
+      id: 003-seed-test-account-owners
+      author: electronic-home
+      context: dev
+      changes:
+        - insert:
+            tableName: account_owners
+            columns:
+              - column:
+                  name: account_id
+                  valueComputed: "(SELECT id FROM accounts WHERE number = '000000000001')"
+              - column:
+                  name: owner_id
+                  valueComputed: "(SELECT id FROM owners WHERE full_name = 'Тестовый Тест Тестович' AND is_test)"
+              - column: { name: is_test, valueBoolean: true }
+        - insert:
+            tableName: account_owners
+            columns:
+              - column:
+                  name: account_id
+                  valueComputed: "(SELECT id FROM accounts WHERE number = '000000000001')"
+              - column:
+                  name: owner_id
+                  valueComputed: "(SELECT id FROM owners WHERE full_name = 'Тестовая Теста Тестовна' AND is_test)"
+              - column: { name: is_test, valueBoolean: true }
+      rollback:
+        - sql:
+            sql: DELETE FROM account_owners WHERE is_test

@@ -1,5 +1,7 @@
 # No defaults for secrets: a missing DB_URL / DB_USER / DB_PASSWORD fails the startup.
 spring:
+  liquibase:
+    contexts: prod
   datasource:
     url: ${DB_URL}
     username: ${DB_USER}

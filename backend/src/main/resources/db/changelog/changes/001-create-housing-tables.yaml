@@ -1,0 +1,153 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-addresses
+      author: electronic-home
+      changes:
+        - createTable:
+            tableName: addresses
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_addresses
+              - column:
+                  name: street
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: house
+                  type: varchar(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: apartment
+                  type: varchar(32)
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: addresses
+            columnNames: street, house, apartment
+            constraintName: uq_addresses_street_house_apartment
+
+  - changeSet:
+      id: 001-create-owners
+      author: electronic-home
+      changes:
+        - createTable:
+            tableName: owners
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_owners
+              - column:
+                  name: full_name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 001-create-accounts
+      author: electronic-home
+      changes:
+        - createTable:
+            tableName: accounts
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_accounts
+              - column:
+                  name: number
+                  type: varchar(32)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_accounts_number
+              - column:
+                  name: address_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_accounts_address
+                    references: addresses(id)
+        - createIndex:
+            tableName: accounts
+            indexName: idx_accounts_address_id
+            columns:
+              - column:
+                  name: address_id
+
+  - changeSet:
+      id: 001-create-address-owners
+      author: electronic-home
+      changes:
+        - createTable:
+            tableName: address_owners
+            columns:
+              - column:
+                  name: address_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_address_owners_address
+                    references: addresses(id)
+              - column:
+                  name: owner_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_address_owners_owner
+                    references: owners(id)
+        - addPrimaryKey:
+            tableName: address_owners
+            columnNames: address_id, owner_id
+            constraintName: pk_address_owners
+        - createIndex:
+            tableName: address_owners
+            indexName: idx_address_owners_owner_id
+            columns:
+              - column:
+                  name: owner_id
+
+  - changeSet:
+      id: 001-create-account-owners
+      author: electronic-home
+      changes:
+        - createTable:
+            tableName: account_owners
+            columns:
+              - column:
+                  name: account_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_account_owners_account
+                    references: accounts(id)
+              - column:
+                  name: owner_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_account_owners_owner
+                    references: owners(id)
+        - addPrimaryKey:
+            tableName: account_owners
+            columnNames: account_id, owner_id
+            constraintName: pk_account_owners
+        - createIndex:
+            tableName: account_owners
+            indexName: idx_account_owners_owner_id
+            columns:
+              - column:
+                  name: owner_id
