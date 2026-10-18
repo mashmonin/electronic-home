@@ -1,0 +1,42 @@
+databaseChangeLog:
+  - changeSet:
+      id: 008-add-receipt-amounts
+      author: electronic-home
+      changes:
+        - addColumn:
+            tableName: receipts
+            columns:
+              - column:
+                  name: capital_repair_amount
+                  type: numeric(12,2)
+              - column:
+                  name: utilities_amount
+                  type: numeric(12,2)
+              # where the amounts come from: MANUAL (given when the receipt is published) or PARSED (read from the PDF)
+              - column:
+                  name: amounts_source
+                  type: varchar(16)
+              - column:
+                  name: amounts_at
+                  type: timestamptz
+        # Both amounts or none; with amounts the source and the time are required, without them they are empty.
+        - sql:
+            sql: >
+              ALTER TABLE receipts ADD CONSTRAINT ck_receipts_amounts CHECK (
+              (capital_repair_amount IS NULL AND utilities_amount IS NULL AND amounts_source IS NULL AND amounts_at IS NULL)
+              OR (capital_repair_amount IS NOT NULL AND utilities_amount IS NOT NULL AND amounts_source IS NOT NULL
+              AND amounts_at IS NOT NULL AND capital_repair_amount >= 0 AND utilities_amount >= 0
+              AND amounts_source IN ('MANUAL', 'PARSED')))
+      rollback:
+        - dropColumn:
+            tableName: receipts
+            columnName: amounts_at
+        - dropColumn:
+            tableName: receipts
+            columnName: amounts_source
+        - dropColumn:
+            tableName: receipts
+            columnName: utilities_amount
+        - dropColumn:
+            tableName: receipts
+            columnName: capital_repair_amount

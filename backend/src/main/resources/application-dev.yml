@@ -14,3 +14,7 @@ management:
   endpoint:
     health:
       show-details: always
+
+# Publishing of receipts in development; production has no token until RECEIPTS_ADMIN_TOKEN is set.
+receipts:
+  admin-token: dev-admin-token

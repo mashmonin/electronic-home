@@ -9,7 +9,8 @@ RUN gradle bootJar -x test --no-daemon -q \
     && cp build/libs/*-SNAPSHOT.jar app.jar
 
 FROM eclipse-temurin:21-jre
-RUN useradd --system --uid 1001 app
+# /data/receipts is the mount point of the receipts volume; a new named volume takes the owner of this directory
+RUN useradd --system --uid 1001 app && mkdir -p /data/receipts && chown app /data/receipts
 USER app
 WORKDIR /app
 COPY --from=build /workspace/app.jar app.jar

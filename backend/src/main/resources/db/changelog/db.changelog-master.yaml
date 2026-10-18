@@ -11,3 +11,7 @@ databaseChangeLog:
       file: db/changelog/changes/005-seed-test-meters.yaml
   - include:
       file: db/changelog/changes/006-add-meter-verification-date.yaml
+  - include:
+      file: db/changelog/changes/007-create-receipts.yaml
+  - include:
+      file: db/changelog/changes/008-add-receipt-amounts.yaml

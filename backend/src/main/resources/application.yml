@@ -1,5 +1,9 @@
 # Common settings. The profile (dev | prod) is mandatory: see ProfileGuard.
 spring:
+  mvc:
+    formcontent:
+      filter:
+        enabled: false
   application:
     name: electronic-home
   jpa:
@@ -14,6 +18,12 @@ readings:
   period:
     closing-day: 25
     enforced: true
+
+# Receipts: PDF files on a directory (a volume in Docker), see README. Publishing needs RECEIPTS_ADMIN_TOKEN.
+receipts:
+  storage:
+    path: ${RECEIPTS_STORAGE_PATH:./data/receipts}
+  max-size: ${RECEIPTS_MAX_SIZE:5MB}
 
 server:
   port: 8080

@@ -28,6 +28,9 @@ public class AccountEntity {
     @JoinColumn(name = "address_id", nullable = false)
     private AddressEntity address;
 
+    @Column(name = "is_test", nullable = false)
+    private boolean test;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "account_owners",
@@ -40,6 +43,10 @@ public class AccountEntity {
 
     public String getNumber() {
         return number;
+    }
+
+    public boolean isTest() {
+        return test;
     }
 
     public AddressEntity getAddress() {

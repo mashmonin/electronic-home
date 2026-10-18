@@ -68,6 +68,45 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.
 `READINGS_PERIOD_CLOSING_DAY=25`. Чтобы отключить блокировку при тестировании, запустите бэкенд с `READINGS_PERIOD_ENFORCED=false`
 (в docker compose — через `environment` сервиса `backend`).
 
+## Квитанции
+
+PDF-квитанции лежат в каталоге на томе Docker `receipts_data` (в контейнере `/data/receipts`), а записи о них —
+в таблице `receipts` (счёт, месяц, ключ файла, размер, SHA-256). Файл хранится под случайным именем, имя от клиента
+не используется. Для каждого счёта и месяца — одна квитанция; повторная публикация заменяет файл.
+
+Опубликовать (токен — `RECEIPTS_ADMIN_TOKEN`; в `dev` это `dev-admin-token`; без токена публикация выключена, `403`):
+
+```bash
+curl -X PUT https://localhost/api/accounts/000000000001/receipts/2026-10 \
+  -H 'X-Admin-Token: dev-admin-token' -H 'Content-Type: application/pdf' \
+  --data-binary @receipt.pdf
+```
+
+Суммы квитанции — капитальный ремонт и коммунальные услуги в рублях — пока передаются при публикации необязательными
+параметрами `capital_repair` и `utilities` (оба или ни одного, число с точкой, не более двух знаков после запятой):
+
+```bash
+curl -X PUT 'https://localhost/api/accounts/000000000001/receipts/2026-10?capital_repair=1842.50&utilities=6318.27' \\
+  -H 'X-Admin-Token: dev-admin-token' -H 'Content-Type: application/pdf' --data-binary @receipt.pdf
+```
+
+Без параметров суммы не заданы (на вкладке — прочерк); замена файла без параметров сбрасывает прежние суммы. В БД суммы лежат
+с источником (`MANUAL`) и временем записи: так их позже заполнит автоматический разбор PDF при загрузке
+(источник `PARSED`) — он пока не реализован.
+
+Список и скачивание: `GET /api/accounts/{номер}/receipts` и `GET /api/accounts/{номер}/receipts/{ГГГГ-ММ}`.
+На вкладке «Квитанции» месяцы показаны аккордеоном, внутри панели — две суммы и ссылка «Скачать PDF».
+
+| Параметр | По умолчанию | Описание |
+|---|---|---|
+| `receipts.storage.path` (`RECEIPTS_STORAGE_PATH`) | `./data/receipts`; в Docker `/data/receipts` | Каталог файлов. |
+| `receipts.max-size` (`RECEIPTS_MAX_SIZE`) | `5MB` | Максимальный размер файла; nginx пропускает тело до 6 МБ (`client_max_body_size`), при изменении лимита поправьте и его. |
+| `receipts.admin-token` (`RECEIPTS_ADMIN_TOKEN`) | нет (`dev`: `dev-admin-token`) | Токен публикации. |
+
+**Резервное копирование.** Том `receipts_data` и БД нужно сохранять вместе: запись без файла отдаёт `404` и ошибку в
+журнале. **Безопасность.** Авторизации жильцов пока нет: любой, кто знает номер счёта, может скачать его квитанцию.
+Не публикуйте реальные квитанции, пока скачивание не защищено.
+
 ## Тесты (тоже в контейнерах)
 
 ```bash

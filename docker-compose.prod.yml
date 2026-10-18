@@ -14,6 +14,8 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-electronic_home}
       DB_USER: ${DB_USER:?DB_USER is required}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      # publishing of receipts is switched off while the token is empty
+      RECEIPTS_ADMIN_TOKEN: ${RECEIPTS_ADMIN_TOKEN:-}
     restart: unless-stopped
 
   nginx:
