@@ -43,6 +43,7 @@ class AccountApiIT {
 
     @AfterEach
     void removeExtraRows() {
+        jdbc.update("DELETE FROM water_meters WHERE address_id IN (SELECT id FROM addresses WHERE apartment = '99')");
         jdbc.update("DELETE FROM account_owners WHERE account_id IN (SELECT id FROM accounts WHERE number = '000000000099')");
         jdbc.update("DELETE FROM accounts WHERE number = '000000000099'");
         jdbc.update("DELETE FROM addresses WHERE apartment = '99'");
@@ -91,6 +92,80 @@ class AccountApiIT {
         JsonNode body = json.readTree(response.body());
         assertThat(body.get("owners").isArray()).isTrue();
         assertThat(body.get("owners")).isEmpty();
+    }
+
+    private JsonNode meter(JsonNode body, String number) {
+        for (JsonNode meter : body.get("meters")) {
+            if (meter.get("number").asString().equals(number)) {
+                return meter;
+            }
+        }
+        throw new AssertionError("no meter " + number);
+    }
+
+    @Test
+    void listsHotAndColdTestMetersSortedByNumber() throws Exception {
+        JsonNode body = json.readTree(get("000000000001").body());
+
+        List<String> described = new ArrayList<>();
+        body.get("meters").forEach(m -> described.add(m.get("number").asString() + ":" + m.get("water_type").asString()));
+        assertThat(described).containsExactly("Тест 1:HOT", "Тест 2:COLD");
+    }
+
+    @Test
+    void readingsAreNewestFirstWithPreviousReading() throws Exception {
+        JsonNode hot = meter(json.readTree(get("000000000001").body()), "Тест 1");
+
+        JsonNode readings = hot.get("readings");
+        assertThat(readings).hasSize(2);
+        assertThat(readings.get(0).get("value").decimalValue()).isEqualByComparingTo("245.300");
+        assertThat(readings.get(0).get("reading_date").asString()).isEqualTo("2026-09-25");
+        assertThat(readings.get(0).get("previous").get("value").decimalValue()).isEqualByComparingTo("230.000");
+        assertThat(readings.get(0).get("previous").get("reading_date").asString()).isEqualTo("2026-08-25");
+        assertThat(readings.get(1).get("value").decimalValue()).isEqualByComparingTo("230.000");
+        assertThat(readings.get(1).get("previous").isNull()).isTrue();
+    }
+
+    @Test
+    void coldMeterReadingsMatchTheSeed() throws Exception {
+        JsonNode cold = meter(json.readTree(get("000000000001").body()), "Тест 2");
+
+        assertThat(cold.get("readings").get(0).get("value").decimalValue()).isEqualByComparingTo("512.100");
+        assertThat(cold.get("readings").get(0).get("previous").get("value").decimalValue()).isEqualByComparingTo("498.500");
+    }
+
+    @Test
+    void apartmentWithoutMetersReturnsEmptyList() throws Exception {
+        Long address = jdbc.queryForObject(
+                "INSERT INTO addresses (street, house, apartment) VALUES ('ул. Тестовая', 'Тест', '99') RETURNING id",
+                Long.class);
+        jdbc.update("INSERT INTO accounts (number, address_id) VALUES ('000000000099', ?)", address);
+
+        JsonNode body = json.readTree(get("000000000099").body());
+
+        assertThat(body.get("meters").isArray()).isTrue();
+        assertThat(body.get("meters")).isEmpty();
+    }
+
+    @Test
+    void meterWithoutReadingsReturnsEmptyReadings() throws Exception {
+        Long address = jdbc.queryForObject(
+                "INSERT INTO addresses (street, house, apartment) VALUES ('ул. Тестовая', 'Тест', '99') RETURNING id",
+                Long.class);
+        jdbc.update("INSERT INTO accounts (number, address_id) VALUES ('000000000099', ?)", address);
+        jdbc.update("INSERT INTO water_meters (address_id, water_type, number) VALUES (?, 'COLD', 'Пустой')", address);
+
+        JsonNode body = json.readTree(get("000000000099").body());
+
+        assertThat(meter(body, "Пустой").get("readings")).isEmpty();
+    }
+
+    @Test
+    void metersUseSnakeCaseAndExposeNoInternalFields() throws Exception {
+        String body = get("000000000001").body();
+
+        assertThat(body).contains("\"water_type\"", "\"reading_date\"", "\"previous\"");
+        assertThat(body).doesNotContain("waterType", "readingDate", "previousReading", "meter_id");
     }
 
     @Test

@@ -4,8 +4,7 @@ import AppHeader from './AppHeader'
 import ContactCard from './ContactCard'
 import ReadingsForm from './ReadingsForm'
 import { type Account, fetchAccount, resolveAccountNumber } from './accountApi'
-import { getRisers } from './readingsApi'
-import type { Riser } from './types'
+import { buildRisers } from './risers'
 
 const MONTHS = [
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
@@ -15,7 +14,7 @@ const DEADLINE_DAY = 25
 
 type State =
   | { kind: 'loading' }
-  | { kind: 'ready'; account: Account; risers: Riser[] }
+  | { kind: 'ready'; account: Account }
   | { kind: 'not-found' }
   | { kind: 'error' }
   | { kind: 'no-account' }
@@ -42,9 +41,9 @@ export default function MeterReadingsPage({
     }
     let cancelled = false
     setState({ kind: 'loading' })
-    Promise.all([fetchAccount(accountNumber), getRisers()]).then(([result, risers]) => {
+    fetchAccount(accountNumber).then((result) => {
       if (cancelled) return
-      if (result.status === 'ok') setState({ kind: 'ready', account: result.account, risers })
+      if (result.status === 'ok') setState({ kind: 'ready', account: result.account })
       else setState({ kind: result.status })
     })
     return () => {
@@ -71,7 +70,7 @@ export default function MeterReadingsPage({
     )
   }
 
-  const { account, risers } = state
+  const { account } = state
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <AppHeader account={account} />
@@ -85,7 +84,7 @@ export default function MeterReadingsPage({
               {MONTHS[today.getMonth()]} {today.getFullYear()} · Передайте показания до {DEADLINE_DAY} числа
             </Typography.Text>
           </div>
-          <ReadingsForm key={account.number} accountNumber={account.number} risers={risers} />
+          <ReadingsForm key={account.number} accountNumber={account.number} risers={buildRisers(account.meters)} />
           <ContactCard />
         </Flex>
       </Layout.Content>

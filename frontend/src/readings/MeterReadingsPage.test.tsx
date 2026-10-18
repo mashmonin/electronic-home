@@ -1,15 +1,32 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MeterReadingsPage from './MeterReadingsPage'
-import type { Account } from './accountApi'
+import type { Account, AccountMeter } from './accountApi'
 import * as api from './readingsApi'
 import { validateReading } from './validation'
+
+// Readings are given newest first; each one points to the next (older) one as its previous reading.
+function meter(number: string, type: 'HOT' | 'COLD', values: number[]): AccountMeter {
+  return {
+    number,
+    water_type: type,
+    readings: values.map((value, index) => ({
+      value,
+      reading_date: `2026-0${9 - index}-25`,
+      previous: index + 1 < values.length ? { value: values[index + 1], reading_date: `2026-0${8 - index}-25` } : null,
+    })),
+  }
+}
 
 const ACCOUNT: Account = {
   number: '000000000001',
   address: 'ул. Тестовая, д. Тест, кв. 1',
   premise: { street: 'ул. Тестовая', house: 'Тест', apartment: '1' },
   owners: [{ full_name: 'Тестовая Теста Тестовна' }, { full_name: 'Тестовый Тест Тестович' }],
+  meters: [
+    meter('Тест 1', 'HOT', [245.3, 230]),
+    meter('Тест 2', 'COLD', [512.1, 498.5]),
+  ],
 }
 
 function mockAccount(account: Account = ACCOUNT) {
@@ -36,10 +53,12 @@ describe('MeterReadingsPage', () => {
     expect(screen.getByText('Лицевой счёт № 000000000001')).toBeInTheDocument()
     expect(screen.getByText(/Август 2026 · Передайте показания до 25 числа/)).toBeInTheDocument()
     expect(screen.getByText('Стояк 1')).toBeInTheDocument()
-    expect(screen.getByText('Стояк 2')).toBeInTheDocument()
-    expect(screen.getAllByPlaceholderText('0.000')).toHaveLength(4)
+    expect(screen.queryByText('Стояк 2')).not.toBeInTheDocument()
+    expect(screen.getAllByPlaceholderText('0.000')).toHaveLength(2)
+    expect(screen.getByText('Счётчик № Тест 1')).toBeInTheDocument()
+    expect(screen.getByText('Счётчик № Тест 2')).toBeInTheDocument()
     expect(screen.getByText('Пред. показание: 245.300 м³')).toBeInTheDocument()
-    expect(screen.getAllByText('Счётчик № —')).toHaveLength(2)
+    expect(screen.getByText('Пред. показание: 512.100 м³')).toBeInTheDocument()
     expect(screen.getByText('Нужна помощь?')).toBeInTheDocument()
     expect(screen.getByText('Председатель правления ТСЖ')).toBeInTheDocument()
     expect(screen.getByText('+7 (999) 123-45-67')).toBeInTheDocument()
@@ -75,7 +94,7 @@ describe('MeterReadingsPage', () => {
   it('adds a riser', async () => {
     await renderPage()
     fireEvent.click(screen.getByRole('button', { name: '+ Добавить стояк' }))
-    expect(screen.getByText('Стояк 3')).toBeInTheDocument()
+    expect(screen.getByText('Стояк 2')).toBeInTheDocument()
   })
 
   it('does not submit an empty form', async () => {
@@ -95,7 +114,7 @@ describe('MeterReadingsPage', () => {
     expect(await screen.findByText('Показания переданы')).toBeInTheDocument()
     expect(submit).toHaveBeenCalledWith({
       accountNumber: '000000000001',
-      risers: [{ hot: '250.125', cold: undefined }, { hot: undefined, cold: undefined }],
+      risers: [{ hot: '250.125', cold: undefined }],
     })
   })
 
@@ -110,6 +129,61 @@ describe('MeterReadingsPage', () => {
       expect(screen.queryByText('Показание не может быть меньше предыдущего')).not.toBeInTheDocument()
     })
     expect(screen.getAllByLabelText('Горячая вода, м³')[0]).toHaveValue('')
+  })
+})
+
+describe('MeterReadingsPage meters', () => {
+  it('builds a riser card per pair of hot and cold meters', async () => {
+    mockAccount({
+      ...ACCOUNT,
+      meters: [
+        meter('Г-1', 'HOT', [10]),
+        meter('Х-1', 'COLD', [20]),
+        meter('Г-2', 'HOT', [30]),
+        meter('Х-2', 'COLD', [40]),
+      ],
+    })
+    await renderPage()
+    expect(screen.getByText('Стояк 1')).toBeInTheDocument()
+    expect(screen.getByText('Стояк 2')).toBeInTheDocument()
+    expect(screen.getByText('Счётчик № Г-2')).toBeInTheDocument()
+    expect(screen.getByText('Счётчик № Х-2')).toBeInTheDocument()
+    expect(screen.getByText('Пред. показание: 40.000 м³')).toBeInTheDocument()
+  })
+
+  it('shows dashes for an unpaired meter', async () => {
+    mockAccount({ ...ACCOUNT, meters: [meter('Г-1', 'HOT', [10])] })
+    await renderPage()
+    expect(screen.getByText('Счётчик № Г-1')).toBeInTheDocument()
+    expect(screen.getByText('Счётчик № —')).toBeInTheDocument()
+    expect(screen.getByText('Пред. показание: —')).toBeInTheDocument()
+  })
+
+  it('shows no cards for an apartment without meters but lets the user add one', async () => {
+    mockAccount({ ...ACCOUNT, meters: [] })
+    await renderPage()
+    expect(screen.queryByText('Стояк 1')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '+ Добавить стояк' }))
+    expect(screen.getByText('Стояк 1')).toBeInTheDocument()
+  })
+
+  it('shows dashes and skips the minimum check for a meter without readings', async () => {
+    mockAccount({ ...ACCOUNT, meters: [{ number: 'Г-1', water_type: 'HOT', readings: [] }] })
+    const submit = vi.spyOn(api, 'submitReadings').mockResolvedValue()
+    await renderPage()
+    expect(screen.getByText('Счётчик № Г-1')).toBeInTheDocument()
+    expect(screen.getAllByText('Пред. показание: —')).toHaveLength(2)
+    fireEvent.change(screen.getByLabelText('Горячая вода, м³'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить показания' }))
+    expect(await screen.findByText('Показания переданы')).toBeInTheDocument()
+    expect(submit).toHaveBeenCalled()
+  })
+
+  it('checks the reading against the latest value of its own meter', async () => {
+    await renderPage()
+    fireEvent.change(screen.getByLabelText('Холодная вода, м³'), { target: { value: '512.099' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить показания' }))
+    expect(await screen.findByText('Показание не может быть меньше предыдущего')).toBeInTheDocument()
   })
 })
 

@@ -1,8 +1,12 @@
 package com.example.electronichome.account;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 
 /** Read-only view of the {@code addresses} table: an address is a single apartment. */
@@ -22,6 +26,9 @@ public class AddressEntity {
     @Column(nullable = false)
     private String apartment;
 
+    @OneToMany(mappedBy = "address")
+    private Set<WaterMeterEntity> meters = new HashSet<>();
+
     protected AddressEntity() {
     }
 
@@ -35,5 +42,9 @@ public class AddressEntity {
 
     public String getApartment() {
         return apartment;
+    }
+
+    public Set<WaterMeterEntity> getMeters() {
+        return meters;
     }
 }

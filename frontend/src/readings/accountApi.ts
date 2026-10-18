@@ -1,8 +1,22 @@
+export interface AccountReading {
+  value: number
+  reading_date: string
+  previous: { value: number; reading_date: string } | null
+}
+
+export interface AccountMeter {
+  number: string
+  water_type: 'HOT' | 'COLD'
+  /** Newest first. */
+  readings: AccountReading[]
+}
+
 export interface Account {
   number: string
   address: string
   premise: { street: string; house: string; apartment: string }
   owners: { full_name: string }[]
+  meters: AccountMeter[]
 }
 
 export type AccountLoadResult =

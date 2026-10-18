@@ -1,11 +1,13 @@
 export interface Meter {
-  previous: number
+  number: string
+  /** Value of the latest reading; undefined while the meter has no readings. */
+  previous?: number
 }
 
+/** A card on the screen: the N-th hot water meter paired with the N-th cold water meter. */
 export interface Riser {
-  meterNumber?: string
-  hot: Meter
-  cold: Meter
+  hot?: Meter
+  cold?: Meter
 }
 
 export interface RiserValues {

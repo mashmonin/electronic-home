@@ -19,9 +19,14 @@ export default function ReadingField({ name, label, meter }: Props) {
         if (error) throw new Error(error)
       } }]}
       extra={
-        <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-          Пред. показание: {meter ? `${formatReading(meter.previous)} м³` : '—'}
-        </Typography.Text>
+        <>
+          <Typography.Text type="secondary" style={{ display: 'block', fontSize: 11 }}>
+            Счётчик № {meter?.number ?? '—'}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ display: 'block', fontSize: 11 }}>
+            Пред. показание: {meter?.previous === undefined ? '—' : `${formatReading(meter.previous)} м³`}
+          </Typography.Text>
+        </>
       }
     >
       <Input size="large" inputMode="decimal" placeholder="0.000" />
