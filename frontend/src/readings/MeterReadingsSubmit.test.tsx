@@ -8,6 +8,8 @@ function meter(number: string, type: 'HOT' | 'COLD', ...values: number[]): Accou
     number,
     water_type: type,
     verification_date: null,
+    current_period_reading: null,
+    input_locked: false,
     readings: values.map((value, index) => ({
       value,
       reading_date: `2026-0${9 - index}-25`,
@@ -21,6 +23,7 @@ const ACCOUNT: Account = {
   address: 'ул. Тестовая, д. Тест, кв. 1',
   premise: { street: 'ул. Тестовая', house: 'Тест', apartment: '1' },
   owners: [],
+  reading_period: { start: '2026-09-26', end: '2026-10-25', next_start: '2026-10-26', all_submitted: false, enforced: true },
   meters: [meter('Тест 1', 'HOT', 245.3, 230), meter('Тест 2', 'COLD', 512.1, 498.5)],
 }
 
@@ -53,22 +56,23 @@ function fakeServer(post: PostHandler, account: Account = ACCOUNT): FakeServer {
   return server
 }
 
-// Saves the given values as the newest readings of the meters, like the real backend would.
+// Saves the given values the way the backend does: the meter gets a reading of the current period and is locked.
 function saved(body: Posted, server: FakeServer) {
+  const meters = server.account.meters.map((m) => {
+    const item = body.readings.find((r) => r.meter_number === m.number)
+    if (!item) return m
+    const head = m.readings[0]
+    const reading = {
+      value: item.value,
+      reading_date: '2026-10-18',
+      previous: head && { value: head.value, reading_date: head.reading_date },
+    }
+    return { ...m, readings: [reading, ...m.readings], current_period_reading: reading, input_locked: true }
+  })
   server.account = {
     ...server.account,
-    meters: server.account.meters.map((m) => {
-      const item = body.readings.find((r) => r.meter_number === m.number)
-      if (!item) return m
-      const previous = m.readings[0]
-      return {
-        ...m,
-        readings: [
-          { value: item.value, reading_date: '2026-10-18', previous: previous && { value: previous.value, reading_date: previous.reading_date } },
-          ...m.readings,
-        ],
-      }
-    }),
+    reading_period: { ...server.account.reading_period, all_submitted: meters.every((m) => m.current_period_reading !== null) },
+    meters,
   }
   return new Response(JSON.stringify({ readings: [] }), { status: 201 })
 }
@@ -81,7 +85,7 @@ afterEach(() => vi.restoreAllMocks())
 
 async function renderPage() {
   render(<MeterReadingsPage today={new Date(2026, 9, 18)} search="?account=000000000001" />)
-  await screen.findByText('Ввод показаний')
+  await screen.findByRole('heading', { level: 1 })
 }
 
 const card = (name: string) => screen.getByRole('heading', { name }).closest('.ant-card') as HTMLElement
@@ -91,27 +95,52 @@ const send = () => fireEvent.click(screen.getByRole('button', { name: 'Отпр�
 const type = (field: HTMLElement, value: string) => fireEvent.change(field, { target: { value } })
 
 describe('submitting readings', () => {
-  it('sends the meter numbers and refreshes the previous readings after saving', async () => {
+  it('sends the meter numbers and shows the submitted reading as a locked one after saving', async () => {
     const server = fakeServer(saved)
     await renderPage()
-    expect(screen.getByText('Предыдущее показание: 245.300 м³')).toBeInTheDocument()
+    expect(screen.getByText('Передайте показания до 25 октября')).toBeInTheDocument()
 
     type(hot(), '250,125')
     send()
 
     expect(await screen.findByText('Показания переданы')).toBeInTheDocument()
     expect(server.posts).toEqual([{ readings: [{ meter_number: 'Тест 1', value: 250.125 }] }])
-    expect(await screen.findByText('Предыдущее показание: 250.125 м³')).toBeInTheDocument()
-    expect(screen.queryByText('Предыдущее показание: 245.300 м³')).not.toBeInTheDocument()
-    expect(hot()).toHaveValue('')
-    expect(screen.getByRole('heading', { name: 'Тест 1' })).toBeInTheDocument()
+    await waitFor(() => expect(hot()).toBeDisabled())
+    expect(hot()).toHaveValue('250.125')
+    expect(within(card('Тест 1')).getByText('Предыдущее показание: 245.300 м³')).toBeInTheDocument()
+    expect(cold()).toBeEnabled()
     expect(screen.getByRole('heading', { name: 'Тест 2' })).toBeInTheDocument()
+  })
+
+  it('switches the caption to "submitted" and disables the buttons when everything is sent', async () => {
+    fakeServer(saved)
+    await renderPage()
+    type(hot(), '250')
+    type(cold(), '520')
+    send()
+
+    expect(await screen.findByText('Показания сданы, новые можно будет отправить после 25 октября')).toBeInTheDocument()
+    expect(screen.getByText('Показания за октябрь')).toBeInTheDocument()
+    expect(hot()).toBeDisabled()
+    expect(cold()).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Отправить показания' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Сбросить форму' })).toBeDisabled()
+  })
+
+  it('says that a part is submitted when one meter was sent', async () => {
+    fakeServer(saved)
+    await renderPage()
+    type(hot(), '250')
+    send()
+
+    expect(await screen.findByText('Часть показаний сдана. Передайте остальные до 25 октября')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Отправить показания' })).toBeEnabled()
   })
 
   it('does not show the full-screen spinner while the data is being refreshed', async () => {
     const server = fakeServer(saved)
     const { container } = render(<MeterReadingsPage search="?account=000000000001" />)
-    await screen.findByText('Ввод показаний')
+    await screen.findByRole('heading', { level: 1 })
     type(hot(), '250')
     send()
     await screen.findByText('Показания переданы')
@@ -128,7 +157,7 @@ describe('submitting readings', () => {
     expect(server.posts[0].readings).toEqual([{ meter_number: 'Тест 2', value: 520 }])
   })
 
-  it('sends the readings of several cards at once', async () => {
+  it('sends both meters at once', async () => {
     const server = fakeServer(saved)
     await renderPage()
     type(hot(), '250')
@@ -141,16 +170,37 @@ describe('submitting readings', () => {
     ])
   })
 
-  it('accepts a new reading higher than the one just saved and rejects a lower one', async () => {
+  it('does not send a meter that is already locked', async () => {
+    const account: Account = {
+      ...ACCOUNT,
+      meters: [
+        {
+          ...meter('Тест 1', 'HOT', 250, 245.3),
+          current_period_reading: { value: 250, reading_date: '2026-10-18', previous: { value: 245.3, reading_date: '2026-09-25' } },
+          input_locked: true,
+        },
+        meter('Тест 2', 'COLD', 512.1, 498.5),
+      ],
+    }
+    const server = fakeServer(saved, account)
+    await renderPage()
+    type(cold(), '520')
+    send()
+
+    await screen.findByText('Показания переданы')
+    expect(server.posts[0].readings).toEqual([{ meter_number: 'Тест 2', value: 520 }])
+  })
+
+  it('checks the other meter against its own previous reading after one was saved', async () => {
     fakeServer(saved)
     await renderPage()
     type(hot(), '250')
     send()
-    await screen.findByText('Предыдущее показание: 250.000 м³')
+    await screen.findByText('Показания переданы')
 
-    type(hot(), '249')
+    type(cold(), '512.099')
     send()
-    expect(await screen.findByText('Показание не может быть меньше предыдущего')).toBeInTheDocument()
+    expect(await within(card('Тест 2')).findByText('Показание не может быть меньше предыдущего')).toBeInTheDocument()
   })
 
   it('warns when the readings are saved but the data cannot be reloaded', async () => {
@@ -181,6 +231,21 @@ describe('server errors', () => {
     expect(hot()).toHaveValue('250')
     expect(await screen.findByText('Предыдущее показание: 300.000 м³')).toBeInTheDocument()
     expect(server.posts).toHaveLength(1)
+  })
+
+  it('warns that the readings are already submitted and shows them locked after the reload', async () => {
+    fakeServer((_body, s) => {
+      // somebody else submitted the readings of this period in the meantime
+      saved({ readings: [{ meter_number: 'Тест 1', value: 260 }] }, s)
+      return errorsResponse(400, [{ meter_number: 'Тест 1', code: 'ALREADY_SUBMITTED' }])
+    })
+    await renderPage()
+    type(hot(), '250')
+    send()
+
+    expect(await screen.findByText('Показания за этот период уже сданы')).toBeInTheDocument()
+    await waitFor(() => expect(hot()).toBeDisabled())
+    expect(hot()).toHaveValue('260.000')
   })
 
   it('shows the message of INVALID_VALUE at the field', async () => {
@@ -242,7 +307,7 @@ describe('server errors', () => {
 })
 
 describe('several meters of the same type', () => {
-  const twoHot = { ...ACCOUNT, meters: [meter('Г-1', 'HOT', 10), meter('Г-2', 'HOT', 20)] }
+  const twoHot: Account = { ...ACCOUNT, meters: [meter('Г-1', 'HOT', 10), meter('Г-2', 'HOT', 20)] }
   const field = (name: string) => within(card(name)).getByLabelText('Горячая вода, м³')
 
   it('sends the reading of the card it was entered in', async () => {
@@ -255,13 +320,15 @@ describe('several meters of the same type', () => {
     expect(server.posts[0].readings).toEqual([{ meter_number: 'Г-2', value: 25 }])
   })
 
-  it('refreshes the previous reading only in the card that was saved', async () => {
+  it('locks only the card that was saved', async () => {
     fakeServer(saved, twoHot)
     await renderPage()
     type(field('Г-1'), '11')
     send()
 
-    expect(await within(card('Г-1')).findByText('Предыдущее показание: 11.000 м³')).toBeInTheDocument()
+    await waitFor(() => expect(field('Г-1')).toBeDisabled())
+    expect(field('Г-1')).toHaveValue('11.000')
+    expect(field('Г-2')).toBeEnabled()
     expect(within(card('Г-2')).getByText('Предыдущее показание: 20.000 м³')).toBeInTheDocument()
   })
 

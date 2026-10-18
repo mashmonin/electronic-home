@@ -11,6 +11,8 @@ function meter(number: string, type: 'HOT' | 'COLD', values: number[], verificat
     number,
     water_type: type,
     verification_date: verificationDate,
+    current_period_reading: null,
+    input_locked: false,
     readings: values.map((value, index) => ({
       value,
       reading_date: `2026-0${9 - index}-25`,
@@ -24,6 +26,7 @@ const ACCOUNT: Account = {
   address: 'ул. Тестовая, д. Тест, кв. 1',
   premise: { street: 'ул. Тестовая', house: 'Тест', apartment: '1' },
   owners: [{ full_name: 'Тестовая Теста Тестовна' }, { full_name: 'Тестовый Тест Тестович' }],
+  reading_period: { start: '2026-09-26', end: '2026-10-25', next_start: '2026-10-26', all_submitted: false, enforced: true },
   meters: [
     meter('Тест 1', 'HOT', [245.3, 230], '2028-01-01'),
     meter('Тест 2', 'COLD', [512.1, 498.5], '2026-10-17'),
@@ -41,7 +44,7 @@ afterEach(() => vi.restoreAllMocks())
 
 async function renderPage(search = '?account=000000000001', today = new Date(2026, 7, 10)) {
   render(<MeterReadingsPage today={today} search={search} />)
-  await screen.findByText('Ввод показаний')
+  await screen.findByRole('heading', { level: 1 })
 }
 
 // The card of a meter, found by its title.
@@ -57,10 +60,21 @@ describe('MeterReadingsPage', () => {
     expect(screen.getByText('Заявки')).toBeInTheDocument()
     expect(screen.getByText('ул. Тестовая, д. Тест, кв. 1')).toBeInTheDocument()
     expect(screen.getByText('Лицевой счёт № 000000000001')).toBeInTheDocument()
-    expect(screen.getByText(/Август 2026 · Передайте показания до 25 числа/)).toBeInTheDocument()
+    expect(screen.getByText('Показания за октябрь')).toBeInTheDocument()
+    expect(screen.getByText('Передайте показания до 25 октября')).toBeInTheDocument()
     expect(screen.getByText('Нужна помощь?')).toBeInTheDocument()
     expect(screen.getByText('Председатель правления ТСЖ')).toBeInTheDocument()
     expect(screen.getByText('+7 (999) 123-45-67')).toBeInTheDocument()
+  })
+
+  it('has no "Ввод показаний" heading: the period caption is the title of the page', async () => {
+    await renderPage()
+
+    expect(screen.queryByText('Ввод показаний')).not.toBeInTheDocument()
+    const headings = screen.getAllByRole('heading', { level: 1 })
+    expect(headings.map((h) => h.textContent)).toEqual(['Показания за октябрь'])
+    expect(headings[0]).toHaveStyle({ fontSize: '26px' })
+    expect(screen.getByText('Передайте показания до 25 октября').tagName).toBe('STRONG')
   })
 
   it('does not offer to switch the apartment', async () => {
@@ -138,7 +152,7 @@ describe('meter cards', () => {
   })
 
   it('shows a dash instead of the previous reading for a meter without readings', async () => {
-    mockAccount({ ...ACCOUNT, meters: [{ number: 'Г-1', water_type: 'HOT', verification_date: null, readings: [] }] })
+    mockAccount({ ...ACCOUNT, meters: [{ number: 'Г-1', water_type: 'HOT', verification_date: null, current_period_reading: null, input_locked: false, readings: [] }] })
     await renderPage()
     expect(within(card('Г-1')).getByText('Предыдущее показание: —')).toBeInTheDocument()
   })
@@ -171,7 +185,7 @@ describe('entering readings', () => {
   })
 
   it('skips the minimum check for a meter without readings', async () => {
-    mockAccount({ ...ACCOUNT, meters: [{ number: 'Г-1', water_type: 'HOT', verification_date: null, readings: [] }] })
+    mockAccount({ ...ACCOUNT, meters: [{ number: 'Г-1', water_type: 'HOT', verification_date: null, current_period_reading: null, input_locked: false, readings: [] }] })
     const submit = vi.spyOn(api, 'submitReadings').mockResolvedValue({ status: 'ok' })
     await renderPage()
     fireEvent.change(screen.getByLabelText('Горячая вода, м³'), { target: { value: '1' } })
@@ -211,11 +225,129 @@ describe('entering readings', () => {
   })
 })
 
+describe('reading period', () => {
+  const submittedMeter = (number: string, type: 'HOT' | 'COLD', value: number, previous: number): AccountMeter => ({
+    ...meter(number, type, [value, previous]),
+    current_period_reading: {
+      value,
+      reading_date: '2026-10-18',
+      previous: { value: previous, reading_date: '2026-09-25' },
+    },
+    input_locked: true,
+  })
+
+  async function renderAccount(account: Account) {
+    mockAccount(account)
+    render(<MeterReadingsPage today={new Date(2026, 9, 18)} search="?account=000000000001" />)
+    await screen.findByRole('heading', { level: 1 })
+  }
+
+  it('shows the readings that are already submitted as a locked field with the earlier previous reading', async () => {
+    await renderAccount({
+      ...ACCOUNT,
+      meters: [submittedMeter('Тест 1', 'HOT', 250.125, 245.3), meter('Тест 2', 'COLD', [512.1, 498.5])],
+    })
+
+    const hot = within(card('Тест 1')).getByLabelText('Горячая вода, м³')
+    expect(hot).toBeDisabled()
+    expect(hot).toHaveValue('250.125')
+    expect(within(card('Тест 1')).getByText('Предыдущее показание: 245.300 м³')).toBeInTheDocument()
+    expect(within(card('Тест 2')).getByLabelText('Холодная вода, м³')).toBeEnabled()
+  })
+
+  it('says that only a part is submitted and keeps the buttons for the rest', async () => {
+    await renderAccount({
+      ...ACCOUNT,
+      meters: [submittedMeter('Тест 1', 'HOT', 250.125, 245.3), meter('Тест 2', 'COLD', [512.1, 498.5])],
+    })
+
+    expect(screen.getByText('Показания за октябрь')).toBeInTheDocument()
+    expect(screen.getByText('Часть показаний сдана. Передайте остальные до 25 октября')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Отправить показания' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Сбросить форму' })).toBeEnabled()
+  })
+
+  it('says that everything is submitted, shows the values and disables the buttons', async () => {
+    await renderAccount({
+      ...ACCOUNT,
+      reading_period: { ...ACCOUNT.reading_period, all_submitted: true },
+      meters: [submittedMeter('Тест 1', 'HOT', 250.125, 245.3), submittedMeter('Тест 2', 'COLD', 520, 512.1)],
+    })
+
+    expect(screen.getByText('Показания за октябрь')).toBeInTheDocument()
+    expect(screen.getByText('Показания сданы, новые можно будет отправить после 25 октября')).toBeInTheDocument()
+    expect(within(card('Тест 1')).getByLabelText('Горячая вода, м³')).toHaveValue('250.125')
+    expect(within(card('Тест 2')).getByLabelText('Холодная вода, м³')).toHaveValue('520.000')
+    expect(screen.getByRole('button', { name: 'Отправить показания' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Сбросить форму' })).toBeDisabled()
+  })
+
+  it('opens the form again in a new period', async () => {
+    await renderAccount({
+      ...ACCOUNT,
+      reading_period: { start: '2026-10-26', end: '2026-11-25', next_start: '2026-11-26', all_submitted: false, enforced: true },
+      meters: [meter('Тест 1', 'HOT', [250.125, 245.3]), meter('Тест 2', 'COLD', [520, 512.1])],
+    })
+
+    expect(screen.getByText('Показания за ноябрь')).toBeInTheDocument()
+    expect(screen.getByText('Передайте показания до 25 ноября')).toBeInTheDocument()
+    expect(within(card('Тест 1')).getByLabelText('Горячая вода, м³')).toBeEnabled()
+    expect(within(card('Тест 1')).getByText('Предыдущее показание: 250.125 м³')).toBeInTheDocument()
+  })
+
+  it('does not send a locked meter', async () => {
+    const submit = vi.spyOn(api, 'submitReadings').mockResolvedValue({ status: 'ok' })
+    await renderAccount({
+      ...ACCOUNT,
+      meters: [submittedMeter('Тест 1', 'HOT', 250.125, 245.3), meter('Тест 2', 'COLD', [512.1, 498.5])],
+    })
+
+    fireEvent.change(within(card('Тест 2')).getByLabelText('Холодная вода, м³'), { target: { value: '520' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить показания' }))
+
+    expect(await screen.findByText('Показания переданы')).toBeInTheDocument()
+    expect(submit).toHaveBeenCalledWith('000000000001', [{ meterNumber: 'Тест 2', value: '520' }])
+  })
+
+  it('shows a note while the lock is switched off for testing', async () => {
+    await renderAccount({ ...ACCOUNT, reading_period: { ...ACCOUNT.reading_period, enforced: false } })
+    expect(screen.getByText('Тестовый режим: ограничение периода передачи отключено')).toBeInTheDocument()
+  })
+
+  it('has no note when the lock is on', async () => {
+    await renderAccount(ACCOUNT)
+    expect(screen.queryByText(/Тестовый режим/)).not.toBeInTheDocument()
+  })
+
+  it('keeps a meter editable when the server does not lock it, even if it has a reading of the period', async () => {
+    await renderAccount({
+      ...ACCOUNT,
+      reading_period: { ...ACCOUNT.reading_period, all_submitted: true, enforced: false },
+      meters: [
+        { ...submittedMeter('Тест 1', 'HOT', 250.125, 245.3), input_locked: false },
+        { ...submittedMeter('Тест 2', 'COLD', 520, 512.1), input_locked: false },
+      ],
+    })
+
+    expect(within(card('Тест 1')).getByLabelText('Горячая вода, м³')).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Отправить показания' })).toBeInTheDocument()
+  })
+
+  it('does not decide anything by the date of the device', async () => {
+    mockAccount(ACCOUNT)
+    render(<MeterReadingsPage today={new Date(2030, 0, 1)} search="?account=000000000001" />)
+    await screen.findByRole('heading', { level: 1 })
+
+    expect(screen.getByText('Показания за октябрь')).toBeInTheDocument()
+    expect(within(card('Тест 1')).getByLabelText('Горячая вода, м³')).toBeEnabled()
+  })
+})
+
 describe('verification date', () => {
   async function renderOn(today: Date, account: Account = ACCOUNT) {
     mockAccount(account)
     render(<MeterReadingsPage today={today} search="?account=000000000001" />)
-    await screen.findByText('Ввод показаний')
+    await screen.findByRole('heading', { level: 1 })
   }
 
   it('marks only the meter whose verification period is over', async () => {
@@ -279,7 +411,7 @@ describe('MeterReadingsPage account loading', () => {
   it('falls back to the default account number when the URL has none', async () => {
     const fetchMock = mockAccount()
     render(<MeterReadingsPage search="" defaultAccountNumber="000000000001" />)
-    await screen.findByText('Ввод показаний')
+    await screen.findByRole('heading', { level: 1 })
     expect(fetchMock).toHaveBeenCalledWith('/api/accounts/000000000001')
   })
 
@@ -287,21 +419,21 @@ describe('MeterReadingsPage account loading', () => {
     vi.spyOn(globalThis, 'fetch').mockReturnValue(new Promise(() => {}))
     const { container } = render(<MeterReadingsPage search="?account=000000000001" />)
     expect(container.querySelector('.ant-spin')).toBeInTheDocument()
-    expect(screen.queryByText('Ввод показаний')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
   })
 
   it('shows a message when the account is not found', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 404 }))
     render(<MeterReadingsPage search="?account=999" />)
     expect(await screen.findByText('Лицевой счёт не найден')).toBeInTheDocument()
-    expect(screen.queryByText('Ввод показаний')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
   })
 
   it('shows a message on a network error', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network'))
     render(<MeterReadingsPage search="?account=000000000001" />)
     expect(await screen.findByText('Не удалось загрузить данные')).toBeInTheDocument()
-    expect(screen.queryByText('Ввод показаний')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
   })
 
   it('shows a message on a server error', async () => {

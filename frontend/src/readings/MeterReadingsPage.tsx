@@ -1,16 +1,11 @@
-import { Alert, Flex, Grid, Layout, Spin, Typography } from 'antd'
+import { Alert, Flex, Grid, Layout, Spin } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import AppHeader from './AppHeader'
 import ContactCard from './ContactCard'
 import ReadingsForm from './ReadingsForm'
 import { type Account, fetchAccount, resolveAccountNumber } from './accountApi'
+import PeriodCaption from './PeriodCaption'
 import { toMeters } from './meters'
-
-const MONTHS = [
-  'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
-]
-const DEADLINE_DAY = 25
 
 type State =
   | { kind: 'loading' }
@@ -86,14 +81,10 @@ export default function MeterReadingsPage({
       <AppHeader account={account} />
       <Layout.Content style={{ padding: wide ? '38px 40px' : '24px 16px' }}>
         <Flex vertical gap={24} style={{ maxWidth: 700, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center' }}>
-            <Typography.Title level={1} style={{ fontSize: 26, margin: 0 }}>
-              Ввод показаний
-            </Typography.Title>
-            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              {MONTHS[today.getMonth()]} {today.getFullYear()} · Передайте показания до {DEADLINE_DAY} числа
-            </Typography.Text>
-          </div>
+          <PeriodCaption period={account.reading_period} meters={meters} />
+          {!account.reading_period.enforced && (
+            <Alert type="warning" showIcon message="Тестовый режим: ограничение периода передачи отключено" />
+          )}
           {meters.length === 0 ? (
             <Alert type="info" showIcon message="Для этого лицевого счёта счётчики не найдены" />
           ) : (

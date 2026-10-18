@@ -23,12 +23,19 @@ class ReadingService {
     private final WaterMeterRepository meters;
     private final MeterReadingRepository readings;
     private final Clock clock;
+    private final ReadingPeriodProperties periodProperties;
 
-    ReadingService(AccountRepository accounts, WaterMeterRepository meters, MeterReadingRepository readings, Clock clock) {
+    ReadingService(
+            AccountRepository accounts,
+            WaterMeterRepository meters,
+            MeterReadingRepository readings,
+            Clock clock,
+            ReadingPeriodProperties periodProperties) {
         this.accounts = accounts;
         this.meters = meters;
         this.readings = readings;
         this.clock = clock;
+        this.periodProperties = periodProperties;
     }
 
     /** Saves all readings of the request in one transaction, or none of them. */
@@ -57,6 +64,8 @@ class ReadingService {
                 : meters.lockByAddressAndNumbers(account.getAddress(), seen)
                         .stream()
                         .collect(Collectors.toMap(WaterMeterEntity::getNumber, Function.identity(), (a, b) -> a, LinkedHashMap::new));
+        LocalDate today = LocalDate.now(clock);
+        ReadingPeriod period = ReadingPeriod.containing(today, periodProperties.closingDay());
         Map<String, MeterReadingEntity> latest = new LinkedHashMap<>();
         for (ReadingsRequest.Item item : unique) {
             WaterMeterEntity meter = item.meterNumber() == null ? null : byNumber.get(item.meterNumber());
@@ -66,6 +75,10 @@ class ReadingService {
             }
             MeterReadingEntity last = readings.findFirstByMeterOrderByReadingDateDescIdDesc(meter).orElse(null);
             latest.put(meter.getNumber(), last);
+            if (periodProperties.enforced() && last != null && period.contains(last.getReadingDate())) {
+                errors.add(new ReadingError(meter.getNumber(), ReadingError.ALREADY_SUBMITTED));
+                continue;
+            }
             String code = ReadingValidation.check(item.value(), last == null ? null : last.getValue());
             if (code != null) {
                 errors.add(new ReadingError(meter.getNumber(), code));
@@ -75,7 +88,6 @@ class ReadingService {
             throw new InvalidReadingsException(errors);
         }
 
-        LocalDate today = LocalDate.now(clock);
         List<ReadingsResponse.Saved> saved = new ArrayList<>();
         for (ReadingsRequest.Item item : unique) {
             WaterMeterEntity meter = byNumber.get(item.meterNumber());

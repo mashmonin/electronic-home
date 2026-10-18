@@ -9,6 +9,12 @@ spring:
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
 
+# The lock of a submitted period is on in every profile; switch it off for testing with READINGS_PERIOD_ENFORCED=false.
+readings:
+  period:
+    closing-day: 25
+    enforced: true
+
 server:
   port: 8080
   forward-headers-strategy: framework

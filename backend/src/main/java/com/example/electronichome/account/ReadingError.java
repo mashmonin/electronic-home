@@ -8,4 +8,5 @@ public record ReadingError(@JsonProperty("meter_number") String meterNumber, Str
     static final String EMPTY_REQUEST = "EMPTY_REQUEST";
     static final String METER_NOT_FOUND = "METER_NOT_FOUND";
     static final String DUPLICATE_METER = "DUPLICATE_METER";
+    static final String ALREADY_SUBMITTED = "ALREADY_SUBMITTED";
 }

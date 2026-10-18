@@ -22,6 +22,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   INVALID_VALUE: 'Введите число, не более трёх знаков после запятой',
   METER_NOT_FOUND: 'Счётчик не найден',
   DUPLICATE_METER: 'Счётчик указан дважды',
+  ALREADY_SUBMITTED: 'Показания за этот период уже сданы',
 }
 
 type Collected = ReadingToSend & { index: number }
@@ -32,12 +33,14 @@ export default function ReadingsForm({ accountNumber, meters, onChanged }: Props
   const [sending, setSending] = useState(false)
 
   const initialValues: FormValues = { values: meters.map(() => '') }
+  // Everything is submitted for this period: nothing can be sent, so the buttons are disabled.
+  const allLocked = meters.length > 0 && meters.every((meter) => meter.locked)
 
-  // The filled fields, each with the meter of its card.
+  // The filled fields of the meters that can still be entered, each with the meter of its card.
   const collect = (values: string[]) => {
     const readings: Collected[] = []
     values.forEach((value, index) => {
-      if (isFilled(value) && meters[index]) {
+      if (isFilled(value) && meters[index] && !meters[index].locked) {
         readings.push({ meterNumber: meters[index].number, value: normalizeReading(value), index })
       }
     })
@@ -50,7 +53,10 @@ export default function ReadingsForm({ accountNumber, meters, onChanged }: Props
     for (const error of errors) {
       const reading = readings.find((r) => r.meterNumber === error.meterNumber)
       const text = ERROR_MESSAGES[error.code]
-      if (reading && text) {
+      if (error.code === 'ALREADY_SUBMITTED' && text) {
+        // the card turns into a locked one after the reload, so the message cannot stay under its field
+        messageApi.warning(text)
+      } else if (reading && text) {
         fields.push({ name: ['values', reading.index], errors: [text] })
       } else {
         unmatched = true
@@ -113,12 +119,14 @@ export default function ReadingsForm({ accountNumber, meters, onChanged }: Props
           htmlType="submit"
           size="large"
           loading={sending}
+          disabled={allLocked}
           style={{ height: 48, flex: '1 1 240px', fontWeight: 700, fontSize: 15 }}
         >
           Отправить показания
         </Button>
         <Button
           size="large"
+          disabled={allLocked}
           style={{ height: 48, flex: '1 1 240px', fontWeight: 700, fontSize: 15 }}
           onClick={() => form.resetFields()}
         >

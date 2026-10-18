@@ -2,12 +2,16 @@
 export interface Meter {
   number: string
   waterType: 'HOT' | 'COLD'
-  /** Value of the latest reading; undefined while the meter has no readings. */
+  /** Value of the previous reading (for a locked meter: the one before the submitted reading); undefined if none. */
   previous?: number
   /** End of the verification period, `YYYY-MM-DD`; undefined when not known. */
   verificationDate?: string
   /** True when the verification period is over (compared with the system date). */
   expired: boolean
+  /** True when the reading of the current period is already submitted and cannot be changed. */
+  locked: boolean
+  /** The submitted value of the current period; only for a locked meter. */
+  submitted?: number
 }
 
 /** A value for one meter; `value` is already normalized (dot as the decimal separator). */

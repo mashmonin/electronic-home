@@ -8,7 +8,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 /** Account information as returned by {@code GET /api/accounts/{number}}. */
 public record AccountResponse(
-        String number, String address, Premise premise, List<Owner> owners, List<Meter> meters) {
+        String number,
+        String address,
+        Premise premise,
+        List<Owner> owners,
+        @JsonProperty("reading_period") ReadingPeriodInfo readingPeriod,
+        List<Meter> meters) {
 
     public record Premise(String street, String house, String apartment) {
     }
@@ -17,13 +22,28 @@ public record AccountResponse(
     }
 
     /**
+     * The current reading period. {@code allSubmitted}: every meter has a reading in it; {@code enforced}: false
+     * while the lock is switched off for testing.
+     */
+    public record ReadingPeriodInfo(
+            LocalDate start,
+            LocalDate end,
+            @JsonProperty("next_start") LocalDate nextStart,
+            @JsonProperty("all_submitted") boolean allSubmitted,
+            boolean enforced) {
+    }
+
+    /**
      * A water meter; {@code waterType} is {@code HOT} or {@code COLD}, {@code verificationDate} is the end of its
-     * verification period (may be null), readings are newest first.
+     * verification period (may be null), {@code currentPeriodReading} is the reading taken in the current period
+     * (null if none), {@code inputLocked} tells that a new one may not be entered now, readings are newest first.
      */
     public record Meter(
             String number,
             @JsonProperty("water_type") String waterType,
             @JsonProperty("verification_date") LocalDate verificationDate,
+            @JsonProperty("current_period_reading") Reading currentPeriodReading,
+            @JsonProperty("input_locked") boolean inputLocked,
             List<Reading> readings) {
     }
 

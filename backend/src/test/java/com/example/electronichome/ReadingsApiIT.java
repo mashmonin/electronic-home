@@ -36,7 +36,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Testcontainers
 @ActiveProfiles("dev")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "readings.period.enforced=false")
 class ReadingsApiIT {
 
     private static final String TODAY = "2026-10-18";
