@@ -56,7 +56,8 @@ describe('MeterReadingsPage', () => {
   it('shows header data from the account response, period and contacts', async () => {
     await renderPage()
     expect(screen.getByText('ТСЖ «Комфорт»')).toBeInTheDocument()
-    expect(screen.getByText('Показания')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Показания' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'Квитанции' })).not.toHaveAttribute('aria-current')
     expect(screen.getByText('Заявки')).toBeInTheDocument()
     expect(screen.getByText('ул. Тестовая, д. Тест, кв. 1')).toBeInTheDocument()
     expect(screen.getByText('Лицевой счёт № 000000000001')).toBeInTheDocument()

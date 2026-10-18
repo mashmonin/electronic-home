@@ -1,15 +1,7 @@
 import { Typography } from 'antd'
 import type { ReadingPeriod } from './accountApi'
+import { GENITIVE, NOMINATIVE } from './months'
 import type { Meter } from './types'
-
-const NOMINATIVE = [
-  'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
-  'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
-]
-const GENITIVE = [
-  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
-]
 
 interface Props {
   period: ReadingPeriod

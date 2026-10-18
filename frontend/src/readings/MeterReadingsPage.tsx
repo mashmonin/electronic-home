@@ -3,9 +3,11 @@ import { useCallback, useEffect, useState } from 'react'
 import AppHeader from './AppHeader'
 import ContactCard from './ContactCard'
 import ReadingsForm from './ReadingsForm'
+import ReceiptsTab from './ReceiptsTab'
 import { type Account, fetchAccount, resolveAccountNumber } from './accountApi'
 import PeriodCaption from './PeriodCaption'
 import { toMeters } from './meters'
+import { type Tab, tabFromSearch, writeTab } from './tabs'
 
 type State =
   | { kind: 'loading' }
@@ -26,6 +28,7 @@ export default function MeterReadingsPage({
   defaultAccountNumber = import.meta.env.VITE_DEFAULT_ACCOUNT_NUMBER,
 }: Props) {
   const [state, setState] = useState<State>({ kind: 'loading' })
+  const [tab, setTab] = useState<Tab>(() => tabFromSearch(search))
   const wide = Grid.useBreakpoint().md ?? false
   const accountNumber = resolveAccountNumber(search, defaultAccountNumber)
 
@@ -45,6 +48,12 @@ export default function MeterReadingsPage({
       cancelled = true
     }
   }, [accountNumber])
+
+  // The tab is part of the address, so a link or a reload keeps it; the other parameters (account) stay.
+  const changeTab = (next: Tab) => {
+    writeTab(next)
+    setTab(next)
+  }
 
   // Reloads the account in place (no spinner, the form stays mounted); false when the reload failed.
   const refresh = useCallback(async () => {
@@ -78,19 +87,25 @@ export default function MeterReadingsPage({
   const meters = toMeters(account.meters, today)
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <AppHeader account={account} />
+      <AppHeader account={account} activeTab={tab} onTabChange={changeTab} />
       <Layout.Content style={{ padding: wide ? '38px 40px' : '24px 16px' }}>
         <Flex vertical gap={24} style={{ maxWidth: 700, margin: '0 auto' }}>
-          <PeriodCaption period={account.reading_period} meters={meters} />
-          {!account.reading_period.enforced && (
-            <Alert type="warning" showIcon message="Тестовый режим: ограничение периода передачи отключено" />
-          )}
-          {meters.length === 0 ? (
-            <Alert type="info" showIcon message="Для этого лицевого счёта счётчики не найдены" />
+          {tab === 'receipts' ? (
+            <ReceiptsTab accountNumber={account.number} />
           ) : (
-            <ReadingsForm key={account.number} accountNumber={account.number} meters={meters} onChanged={refresh} />
+            <>
+              <PeriodCaption period={account.reading_period} meters={meters} />
+              {!account.reading_period.enforced && (
+                <Alert type="warning" showIcon message="Тестовый режим: ограничение периода передачи отключено" />
+              )}
+              {meters.length === 0 ? (
+                <Alert type="info" showIcon message="Для этого лицевого счёта счётчики не найдены" />
+              ) : (
+                <ReadingsForm key={account.number} accountNumber={account.number} meters={meters} onChanged={refresh} />
+              )}
+              <ContactCard />
+            </>
           )}
-          <ContactCard />
         </Flex>
       </Layout.Content>
     </Layout>

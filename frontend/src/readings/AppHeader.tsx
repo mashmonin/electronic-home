@@ -1,14 +1,31 @@
 import { BellOutlined, HomeOutlined, UserOutlined } from '@ant-design/icons'
 import { Button, Flex, Grid, Layout, Popover, Typography } from 'antd'
 import type { Account } from './accountApi'
+import type { Tab } from './tabs'
 
 interface Props {
   account: Account
+  activeTab: Tab
+  onTabChange: (tab: Tab) => void
 }
 
 const ICON_STYLE = { fontSize: 18, color: '#8c8c8c' }
 
-export default function AppHeader({ account }: Props) {
+// A section of the navigation; the one of the open tab is bold and in the main colour.
+function NavItem({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <Button
+      type="link"
+      aria-current={active ? 'page' : undefined}
+      onClick={onClick}
+      style={{ padding: 0, height: 'auto', fontWeight: active ? 700 : 400, color: active ? '#ffb370' : '#8c8c8c' }}
+    >
+      {label}
+    </Button>
+  )
+}
+
+export default function AppHeader({ account, activeTab, onTabChange }: Props) {
   const wide = Grid.useBreakpoint().md ?? false
 
   const owners = (
@@ -37,9 +54,8 @@ export default function AppHeader({ account }: Props) {
             ТСЖ «Комфорт»
           </Typography.Text>
           <Flex gap={24}>
-            <Typography.Text strong style={{ color: '#ffb370' }}>
-              Показания
-            </Typography.Text>
+            <NavItem label="Показания" active={activeTab === 'readings'} onClick={() => onTabChange('readings')} />
+            <NavItem label="Квитанции" active={activeTab === 'receipts'} onClick={() => onTabChange('receipts')} />
             <Typography.Text type="secondary">Заявки</Typography.Text>
           </Flex>
         </Flex>
