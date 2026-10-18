@@ -1,0 +1,30 @@
+# Production: built static frontend in nginx, certificates mounted from ./infra/certs
+# (tls.crt + tls.key), secrets from .env.prod. The DB port is NOT published.
+services:
+  postgres:
+    environment:
+      POSTGRES_DB: ${DB_NAME:-electronic_home}
+      POSTGRES_USER: ${DB_USER:?DB_USER is required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    restart: unless-stopped
+
+  backend:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-electronic_home}
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+    restart: unless-stopped
+
+  nginx:
+    build:
+      context: .
+      dockerfile: infra/nginx/Dockerfile
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/certs:/etc/nginx/certs:ro
+    restart: unless-stopped

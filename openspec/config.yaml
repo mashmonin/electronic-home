@@ -1,0 +1,43 @@
+schema: spec-driven
+
+context: |
+  Domain: веб-сервис передачи показаний жилищно-коммунальных услуг (ЖКУ) для одного дома
+  (электричество, вода, газ, отопление и т.п.).
+
+  Backend: Java 21, Spring Boot, Gradle (Kotlin DSL), lives in backend/.
+    - PostgreSQL; schema changes only through Liquibase changelogs.
+    - REST API only, no server-side templating.
+    - Spring profiles: `dev` (local development) and `prod` (production).
+
+  Frontend: React + TypeScript (Vite), lives in frontend/.
+    - UI components only from Ant Design (antd).
+
+  Infrastructure: everything runs in Docker containers (PostgreSQL, nginx, backend,
+    frontend build). Nothing infrastructural is installed on the developer machine
+    except Docker itself. nginx terminates TLS (SSL certificates).
+    Compose files: docker-compose.yml (base), docker-compose.dev.yml, docker-compose.prod.yml.
+
+  Process: all work goes through OpenSpec (/opsx:propose -> /opsx:apply -> /opsx:archive).
+  Language of specs and docs: Russian; code identifiers and commits: English.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing

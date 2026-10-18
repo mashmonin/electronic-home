@@ -1,0 +1,21 @@
+# Common settings. The profile (dev | prod) is mandatory: see ProfileGuard.
+spring:
+  application:
+    name: electronic-home
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+
+server:
+  port: 8080
+  forward-headers-strategy: framework
+
+management:
+  endpoints:
+    web:
+      base-path: /api/actuator
+      exposure:
+        include: health

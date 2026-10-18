@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5435/electronic_home}
+    username: ${DB_USER:electronic_home}
+    password: ${DB_PASSWORD:electronic_home}
+
+logging:
+  level:
+    com.example.electronichome: DEBUG
+
+management:
+  endpoint:
+    health:
+      show-details: always
