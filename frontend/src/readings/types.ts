@@ -1,22 +1,13 @@
+/** A water meter as shown on its own card. */
 export interface Meter {
   number: string
+  waterType: 'HOT' | 'COLD'
   /** Value of the latest reading; undefined while the meter has no readings. */
   previous?: number
   /** End of the verification period, `YYYY-MM-DD`; undefined when not known. */
   verificationDate?: string
   /** True when the verification period is over (compared with the system date). */
   expired: boolean
-}
-
-/** A card on the screen: the N-th hot water meter paired with the N-th cold water meter. */
-export interface Riser {
-  hot?: Meter
-  cold?: Meter
-}
-
-export interface RiserValues {
-  hot?: string
-  cold?: string
 }
 
 /** A value for one meter; `value` is already normalized (dot as the decimal separator). */

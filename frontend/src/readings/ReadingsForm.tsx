@@ -1,22 +1,21 @@
 import { Button, Flex, Form, message } from 'antd'
 import { useState } from 'react'
-import RiserCard from './RiserCard'
+import MeterCard from './MeterCard'
 import { submitReadings } from './readingsApi'
-import type { ReadingServerError, ReadingToSend, Riser, RiserValues } from './types'
+import type { Meter, ReadingServerError, ReadingToSend } from './types'
 import { isFilled, normalizeReading } from './validation'
 
 interface FormValues {
-  risers: RiserValues[]
+  /** The entered value of each meter card, by the index of the card. */
+  values: string[]
 }
 
 interface Props {
   accountNumber: string
-  risers: Riser[]
+  meters: Meter[]
   /** Reloads the account after the server answered; resolves to false when the reload failed. */
   onChanged: () => Promise<boolean>
 }
-
-type Kind = 'hot' | 'cold'
 
 const ERROR_MESSAGES: Record<string, string> = {
   VALUE_LESS_THAN_PREVIOUS: 'Показание не может быть меньше предыдущего',
@@ -25,36 +24,34 @@ const ERROR_MESSAGES: Record<string, string> = {
   DUPLICATE_METER: 'Счётчик указан дважды',
 }
 
-export default function ReadingsForm({ accountNumber, risers: knownRisers, onChanged }: Props) {
+type Collected = ReadingToSend & { index: number }
+
+export default function ReadingsForm({ accountNumber, meters, onChanged }: Props) {
   const [form] = Form.useForm<FormValues>()
   const [messageApi, contextHolder] = message.useMessage()
   const [sending, setSending] = useState(false)
 
-  const initialValues: FormValues = { risers: knownRisers.map(() => ({})) }
+  const initialValues: FormValues = { values: meters.map(() => '') }
 
-  // The filled fields that have a meter, each with the form field it came from.
-  const collect = (risers: RiserValues[]) => {
-    const readings: (ReadingToSend & { field: [number, Kind] })[] = []
-    risers.forEach((values, index) => {
-      for (const kind of ['hot', 'cold'] as const) {
-        const value = values?.[kind]
-        const meter = knownRisers[index]?.[kind]
-        if (isFilled(value) && meter) {
-          readings.push({ meterNumber: meter.number, value: normalizeReading(value), field: [index, kind] })
-        }
+  // The filled fields, each with the meter of its card.
+  const collect = (values: string[]) => {
+    const readings: Collected[] = []
+    values.forEach((value, index) => {
+      if (isFilled(value) && meters[index]) {
+        readings.push({ meterNumber: meters[index].number, value: normalizeReading(value), index })
       }
     })
     return readings
   }
 
-  const showServerErrors = (errors: ReadingServerError[], readings: ReturnType<typeof collect>) => {
+  const showServerErrors = (errors: ReadingServerError[], readings: Collected[]) => {
     let unmatched = errors.length === 0
-    const fields: { name: ['risers', number, Kind]; errors: string[] }[] = []
+    const fields: { name: ['values', number]; errors: string[] }[] = []
     for (const error of errors) {
       const reading = readings.find((r) => r.meterNumber === error.meterNumber)
       const text = ERROR_MESSAGES[error.code]
       if (reading && text) {
-        fields.push({ name: ['risers', reading.field[0], reading.field[1]], errors: [text] })
+        fields.push({ name: ['values', reading.index], errors: [text] })
       } else {
         unmatched = true
       }
@@ -63,8 +60,8 @@ export default function ReadingsForm({ accountNumber, risers: knownRisers, onCha
     if (unmatched) messageApi.error('Показания не приняты сервером')
   }
 
-  const onFinish = async ({ risers }: FormValues) => {
-    const readings = collect(risers)
+  const onFinish = async ({ values }: FormValues) => {
+    const readings = collect(values ?? [])
     if (readings.length === 0) {
       messageApi.warning('Введите хотя бы одно показание')
       return
@@ -105,25 +102,11 @@ export default function ReadingsForm({ accountNumber, risers: knownRisers, onCha
   return (
     <Form form={form} layout="vertical" initialValues={initialValues} onFinish={onFinish}>
       {contextHolder}
-      <Form.List name="risers">
-        {(fields, { add }) => (
-          <Flex vertical gap={16}>
-            {fields.map((field) => (
-              <RiserCard key={field.key} index={field.name} riser={knownRisers[field.name]} />
-            ))}
-            <Button
-              size="large"
-              color="primary"
-              variant="outlined"
-              block
-              style={{ height: 48, fontWeight: 700 }}
-              onClick={() => add({})}
-            >
-              + Добавить стояк
-            </Button>
-          </Flex>
-        )}
-      </Form.List>
+      <Flex vertical gap={16}>
+        {meters.map((meter, index) => (
+          <MeterCard key={meter.number} index={index} meter={meter} />
+        ))}
+      </Flex>
       <Flex gap={20} wrap style={{ marginTop: 24 }}>
         <Button
           type="primary"

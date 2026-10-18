@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import MeterReadingsPage from './MeterReadingsPage'
 import type { Account, AccountMeter } from './accountApi'
@@ -84,8 +84,9 @@ async function renderPage() {
   await screen.findByText('Ввод показаний')
 }
 
-const hot = () => screen.getAllByLabelText('Горячая вода, м³')[0]
-const cold = () => screen.getAllByLabelText('Холодная вода, м³')[0]
+const card = (name: string) => screen.getByRole('heading', { name }).closest('.ant-card') as HTMLElement
+const hot = () => within(card('Тест 1')).getByLabelText('Горячая вода, м³')
+const cold = () => within(card('Тест 2')).getByLabelText('Холодная вода, м³')
 const send = () => fireEvent.click(screen.getByRole('button', { name: 'Отправить показания' }))
 const type = (field: HTMLElement, value: string) => fireEvent.change(field, { target: { value } })
 
@@ -93,17 +94,18 @@ describe('submitting readings', () => {
   it('sends the meter numbers and refreshes the previous readings after saving', async () => {
     const server = fakeServer(saved)
     await renderPage()
-    expect(screen.getByText('Пред. показание: 245.300 м³')).toBeInTheDocument()
+    expect(screen.getByText('Предыдущее показание: 245.300 м³')).toBeInTheDocument()
 
     type(hot(), '250,125')
     send()
 
     expect(await screen.findByText('Показания переданы')).toBeInTheDocument()
     expect(server.posts).toEqual([{ readings: [{ meter_number: 'Тест 1', value: 250.125 }] }])
-    expect(await screen.findByText('Пред. показание: 250.125 м³')).toBeInTheDocument()
-    expect(screen.queryByText('Пред. показание: 245.300 м³')).not.toBeInTheDocument()
+    expect(await screen.findByText('Предыдущее показание: 250.125 м³')).toBeInTheDocument()
+    expect(screen.queryByText('Предыдущее показание: 245.300 м³')).not.toBeInTheDocument()
     expect(hot()).toHaveValue('')
-    expect(screen.getByText('Стояк 1')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Тест 1' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Тест 2' })).toBeInTheDocument()
   })
 
   it('does not show the full-screen spinner while the data is being refreshed', async () => {
@@ -126,7 +128,7 @@ describe('submitting readings', () => {
     expect(server.posts[0].readings).toEqual([{ meter_number: 'Тест 2', value: 520 }])
   })
 
-  it('sends both meters of a riser at once', async () => {
+  it('sends the readings of several cards at once', async () => {
     const server = fakeServer(saved)
     await renderPage()
     type(hot(), '250')
@@ -144,7 +146,7 @@ describe('submitting readings', () => {
     await renderPage()
     type(hot(), '250')
     send()
-    await screen.findByText('Пред. показание: 250.000 м³')
+    await screen.findByText('Предыдущее показание: 250.000 м³')
 
     type(hot(), '249')
     send()
@@ -177,7 +179,7 @@ describe('server errors', () => {
 
     expect(await screen.findByText('Показание не может быть меньше предыдущего')).toBeInTheDocument()
     expect(hot()).toHaveValue('250')
-    expect(await screen.findByText('Пред. показание: 300.000 м³')).toBeInTheDocument()
+    expect(await screen.findByText('Предыдущее показание: 300.000 м³')).toBeInTheDocument()
     expect(server.posts).toHaveLength(1)
   })
 
@@ -239,37 +241,38 @@ describe('server errors', () => {
   })
 })
 
-describe('fields without a meter', () => {
-  it('blocks sending when a value is entered in a field of a manually added riser', async () => {
-    const server = fakeServer(saved)
-    await renderPage()
-    fireEvent.click(screen.getByRole('button', { name: '+ Добавить стояк' }))
-    type(screen.getAllByLabelText('Горячая вода, м³')[1], '10')
-    send()
+describe('several meters of the same type', () => {
+  const twoHot = { ...ACCOUNT, meters: [meter('Г-1', 'HOT', 10), meter('Г-2', 'HOT', 20)] }
+  const field = (name: string) => within(card(name)).getByLabelText('Горячая вода, м³')
 
-    expect(await screen.findByText('Для этого поля нет счётчика')).toBeInTheDocument()
-    expect(server.posts).toHaveLength(0)
-  })
-
-  it('does not let an empty field without a meter get in the way of the others', async () => {
-    const account = { ...ACCOUNT, meters: [meter('Г-1', 'HOT', 10)] }
-    const server = fakeServer(saved, account)
+  it('sends the reading of the card it was entered in', async () => {
+    const server = fakeServer(saved, twoHot)
     await renderPage()
-    type(hot(), '11')
+    type(field('Г-2'), '25')
     send()
 
     expect(await screen.findByText('Показания переданы')).toBeInTheDocument()
-    expect(server.posts[0].readings).toEqual([{ meter_number: 'Г-1', value: 11 }])
+    expect(server.posts[0].readings).toEqual([{ meter_number: 'Г-2', value: 25 }])
   })
 
-  it('blocks a value in the field of an unpaired riser side', async () => {
-    const account = { ...ACCOUNT, meters: [meter('Г-1', 'HOT', 10)] }
-    const server = fakeServer(saved, account)
+  it('refreshes the previous reading only in the card that was saved', async () => {
+    fakeServer(saved, twoHot)
     await renderPage()
-    type(cold(), '5')
+    type(field('Г-1'), '11')
     send()
 
-    expect(await screen.findByText('Для этого поля нет счётчика')).toBeInTheDocument()
-    expect(server.posts).toHaveLength(0)
+    expect(await within(card('Г-1')).findByText('Предыдущее показание: 11.000 м³')).toBeInTheDocument()
+    expect(within(card('Г-2')).getByText('Предыдущее показание: 20.000 м³')).toBeInTheDocument()
+  })
+
+  it('shows a server error only in the card of its meter', async () => {
+    fakeServer(() => errorsResponse(400, [{ meter_number: 'Г-2', code: 'INVALID_VALUE' }]), twoHot)
+    await renderPage()
+    type(field('Г-1'), '11')
+    type(field('Г-2'), '25')
+    send()
+
+    expect(await within(card('Г-2')).findByText('Введите число, не более трёх знаков после запятой')).toBeInTheDocument()
+    expect(within(card('Г-1')).queryByText('Введите число, не более трёх знаков после запятой')).not.toBeInTheDocument()
   })
 })

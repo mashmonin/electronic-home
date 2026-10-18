@@ -4,7 +4,7 @@ import AppHeader from './AppHeader'
 import ContactCard from './ContactCard'
 import ReadingsForm from './ReadingsForm'
 import { type Account, fetchAccount, resolveAccountNumber } from './accountApi'
-import { buildRisers } from './risers'
+import { toMeters } from './meters'
 
 const MONTHS = [
   'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
@@ -80,6 +80,7 @@ export default function MeterReadingsPage({
   }
 
   const { account } = state
+  const meters = toMeters(account.meters, today)
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <AppHeader account={account} />
@@ -93,12 +94,11 @@ export default function MeterReadingsPage({
               {MONTHS[today.getMonth()]} {today.getFullYear()} · Передайте показания до {DEADLINE_DAY} числа
             </Typography.Text>
           </div>
-          <ReadingsForm
-            key={account.number}
-            accountNumber={account.number}
-            risers={buildRisers(account.meters, today)}
-            onChanged={refresh}
-          />
+          {meters.length === 0 ? (
+            <Alert type="info" showIcon message="Для этого лицевого счёта счётчики не найдены" />
+          ) : (
+            <ReadingsForm key={account.number} accountNumber={account.number} meters={meters} onChanged={refresh} />
+          )}
           <ContactCard />
         </Flex>
       </Layout.Content>
