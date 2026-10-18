@@ -67,6 +67,18 @@ class MeterSchemaIT {
     }
 
     @Test
+    void verificationDateIsOptionalAndKeptAsIs() {
+        long apartment = address("47");
+        meter(apartment, "HOT", "A-1");
+        jdbc.update("INSERT INTO water_meters (address_id, water_type, number, verification_date) VALUES (?, 'COLD', 'A-2', DATE '2028-01-01')",
+                apartment);
+
+        assertThat(jdbc.queryForObject("SELECT verification_date::text FROM water_meters WHERE number = 'A-1'", String.class)).isNull();
+        assertThat(jdbc.queryForObject("SELECT verification_date::text FROM water_meters WHERE number = 'A-2'", String.class))
+                .isEqualTo("2028-01-01");
+    }
+
+    @Test
     void apartmentCanHaveSeveralMeters() {
         long apartment = address("47");
         meter(apartment, "HOT", "A-1");

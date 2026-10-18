@@ -1,6 +1,7 @@
-import { Form, Input, Typography } from 'antd'
+import { Form, Input, Tag, Typography } from 'antd'
 import type { Meter } from './types'
 import { formatReading, isFilled, validateReading } from './validation'
+import { formatVerificationDate } from './verification'
 
 interface Props {
   name: [number, 'hot' | 'cold']
@@ -26,6 +27,14 @@ export default function ReadingField({ name, label, meter }: Props) {
           </Typography.Text>
           <Typography.Text type="secondary" style={{ display: 'block', fontSize: 11 }}>
             Пред. показание: {meter?.previous === undefined ? '—' : `${formatReading(meter.previous)} м³`}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ display: 'block', fontSize: 11 }}>
+            Дата проверки: {formatVerificationDate(meter?.verificationDate)}
+            {meter?.expired && (
+              <Tag color="error" style={{ marginInlineStart: 8, fontSize: 11 }}>
+                Просрочено
+              </Tag>
+            )}
           </Typography.Text>
         </>
       }

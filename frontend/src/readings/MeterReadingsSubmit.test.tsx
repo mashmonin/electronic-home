@@ -7,6 +7,7 @@ function meter(number: string, type: 'HOT' | 'COLD', ...values: number[]): Accou
   return {
     number,
     water_type: type,
+    verification_date: null,
     readings: values.map((value, index) => ({
       value,
       reading_date: `2026-0${9 - index}-25`,

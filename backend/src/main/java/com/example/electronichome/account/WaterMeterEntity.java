@@ -1,5 +1,6 @@
 package com.example.electronichome.account;
 
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -31,6 +32,10 @@ public class WaterMeterEntity {
     @Column(nullable = false)
     private String number;
 
+    /** End of the verification period of the meter; null when not known. */
+    @Column(name = "verification_date")
+    private LocalDate verificationDate;
+
     @Column(name = "is_test", nullable = false)
     private boolean test;
 
@@ -38,6 +43,10 @@ public class WaterMeterEntity {
     private Set<MeterReadingEntity> readings = new HashSet<>();
 
     protected WaterMeterEntity() {
+    }
+
+    public LocalDate getVerificationDate() {
+        return verificationDate;
     }
 
     public boolean isTest() {

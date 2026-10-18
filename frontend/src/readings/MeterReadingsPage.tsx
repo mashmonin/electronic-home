@@ -96,7 +96,7 @@ export default function MeterReadingsPage({
           <ReadingsForm
             key={account.number}
             accountNumber={account.number}
-            risers={buildRisers(account.meters)}
+            risers={buildRisers(account.meters, today)}
             onChanged={refresh}
           />
           <ContactCard />

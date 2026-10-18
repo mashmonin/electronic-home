@@ -9,3 +9,5 @@ databaseChangeLog:
       file: db/changelog/changes/004-create-meter-tables.yaml
   - include:
       file: db/changelog/changes/005-seed-test-meters.yaml
+  - include:
+      file: db/changelog/changes/006-add-meter-verification-date.yaml

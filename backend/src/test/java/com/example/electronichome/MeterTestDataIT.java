@@ -43,6 +43,12 @@ class MeterTestDataIT {
     }
 
     @Test
+    void testMetersHaveVerificationDates() {
+        assertThat(jdbc.queryForList("SELECT number || '|' || verification_date::text FROM water_meters ORDER BY number", String.class))
+                .containsExactly("Тест 1|2028-01-01", "Тест 2|2026-10-17");
+    }
+
+    @Test
     void hotMeterHasChainedReadings() {
         assertThat(readings("Тест 1")).containsExactly("230.000|2026-08-25|-", "245.300|2026-09-25|230.000");
     }

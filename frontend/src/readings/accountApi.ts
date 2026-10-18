@@ -7,6 +7,8 @@ export interface AccountReading {
 export interface AccountMeter {
   number: string
   water_type: 'HOT' | 'COLD'
+  /** End of the verification period, `YYYY-MM-DD`; null when not known. */
+  verification_date: string | null
   /** Newest first. */
   readings: AccountReading[]
 }

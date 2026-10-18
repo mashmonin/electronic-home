@@ -16,8 +16,15 @@ public record AccountResponse(
     public record Owner(@JsonProperty("full_name") String fullName) {
     }
 
-    /** A water meter; {@code waterType} is {@code HOT} or {@code COLD}, readings are newest first. */
-    public record Meter(String number, @JsonProperty("water_type") String waterType, List<Reading> readings) {
+    /**
+     * A water meter; {@code waterType} is {@code HOT} or {@code COLD}, {@code verificationDate} is the end of its
+     * verification period (may be null), readings are newest first.
+     */
+    public record Meter(
+            String number,
+            @JsonProperty("water_type") String waterType,
+            @JsonProperty("verification_date") LocalDate verificationDate,
+            List<Reading> readings) {
     }
 
     public record Reading(

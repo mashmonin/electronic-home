@@ -1,0 +1,31 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-add-meter-verification-date
+      author: electronic-home
+      changes:
+        - addColumn:
+            tableName: water_meters
+            columns:
+              - column:
+                  name: verification_date
+                  type: date
+
+  # Test meters were created by 005 (already applied in existing dev databases), so their dates are set here.
+  - changeSet:
+      id: 006-seed-test-meter-verification-dates
+      author: electronic-home
+      context: dev
+      changes:
+        - update:
+            tableName: water_meters
+            columns:
+              - column: { name: verification_date, valueDate: "2028-01-01" }
+            where: "number = 'Тест 1' AND is_test"
+        - update:
+            tableName: water_meters
+            columns:
+              - column: { name: verification_date, valueDate: "2026-10-17" }
+            where: "number = 'Тест 2' AND is_test"
+      rollback:
+        - sql:
+            sql: UPDATE water_meters SET verification_date = NULL WHERE is_test

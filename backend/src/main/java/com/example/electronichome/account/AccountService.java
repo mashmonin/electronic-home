@@ -53,7 +53,7 @@ class AccountService {
                 .map(reading -> new AccountResponse.Reading(
                         reading.getValue(), reading.getReadingDate(), toPrevious(reading.getPreviousReading())))
                 .toList();
-        return new AccountResponse.Meter(meter.getNumber(), meter.getWaterType(), readings);
+        return new AccountResponse.Meter(meter.getNumber(), meter.getWaterType(), meter.getVerificationDate(), readings);
     }
 
     private AccountResponse.PreviousReading toPrevious(MeterReadingEntity previous) {

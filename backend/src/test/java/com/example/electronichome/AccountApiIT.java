@@ -135,6 +135,29 @@ class AccountApiIT {
     }
 
     @Test
+    void metersCarryTheirVerificationDate() throws Exception {
+        JsonNode body = json.readTree(get("000000000001").body());
+
+        assertThat(meter(body, "Тест 1").get("verification_date").asString()).isEqualTo("2028-01-01");
+        assertThat(meter(body, "Тест 2").get("verification_date").asString()).isEqualTo("2026-10-17");
+        assertThat(get("000000000001").body()).doesNotContain("verificationDate");
+    }
+
+    @Test
+    void meterWithoutVerificationDateReturnsNull() throws Exception {
+        Long address = jdbc.queryForObject(
+                "INSERT INTO addresses (street, house, apartment) VALUES ('ул. Тестовая', 'Тест', '99') RETURNING id",
+                Long.class);
+        jdbc.update("INSERT INTO accounts (number, address_id) VALUES ('000000000099', ?)", address);
+        jdbc.update("INSERT INTO water_meters (address_id, water_type, number) VALUES (?, 'HOT', 'Без даты')", address);
+
+        JsonNode body = json.readTree(get("000000000099").body());
+
+        assertThat(meter(body, "Без даты").has("verification_date")).isTrue();
+        assertThat(meter(body, "Без даты").get("verification_date").isNull()).isTrue();
+    }
+
+    @Test
     void apartmentWithoutMetersReturnsEmptyList() throws Exception {
         Long address = jdbc.queryForObject(
                 "INSERT INTO addresses (street, house, apartment) VALUES ('ул. Тестовая', 'Тест', '99') RETURNING id",

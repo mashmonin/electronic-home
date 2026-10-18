@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MeterReadingsPage from './MeterReadingsPage'
 import type { Account, AccountMeter } from './accountApi'
@@ -6,10 +6,11 @@ import * as api from './readingsApi'
 import { validateReading } from './validation'
 
 // Readings are given newest first; each one points to the next (older) one as its previous reading.
-function meter(number: string, type: 'HOT' | 'COLD', values: number[]): AccountMeter {
+function meter(number: string, type: 'HOT' | 'COLD', values: number[], verificationDate: string | null = null): AccountMeter {
   return {
     number,
     water_type: type,
+    verification_date: verificationDate,
     readings: values.map((value, index) => ({
       value,
       reading_date: `2026-0${9 - index}-25`,
@@ -24,8 +25,8 @@ const ACCOUNT: Account = {
   premise: { street: 'ул. Тестовая', house: 'Тест', apartment: '1' },
   owners: [{ full_name: 'Тестовая Теста Тестовна' }, { full_name: 'Тестовый Тест Тестович' }],
   meters: [
-    meter('Тест 1', 'HOT', [245.3, 230]),
-    meter('Тест 2', 'COLD', [512.1, 498.5]),
+    meter('Тест 1', 'HOT', [245.3, 230], '2028-01-01'),
+    meter('Тест 2', 'COLD', [512.1, 498.5], '2026-10-17'),
   ],
 }
 
@@ -165,7 +166,7 @@ describe('MeterReadingsPage meters', () => {
   })
 
   it('shows dashes and skips the minimum check for a meter without readings', async () => {
-    mockAccount({ ...ACCOUNT, meters: [{ number: 'Г-1', water_type: 'HOT', readings: [] }] })
+    mockAccount({ ...ACCOUNT, meters: [{ number: 'Г-1', water_type: 'HOT', verification_date: null, readings: [] }] })
     const submit = vi.spyOn(api, 'submitReadings').mockResolvedValue({ status: 'ok' })
     await renderPage()
     expect(screen.getByText('Счётчик № Г-1')).toBeInTheDocument()
@@ -181,6 +182,57 @@ describe('MeterReadingsPage meters', () => {
     fireEvent.change(screen.getByLabelText('Холодная вода, м³'), { target: { value: '512.099' } })
     fireEvent.click(screen.getByRole('button', { name: 'Отправить показания' }))
     expect(await screen.findByText('Показание не может быть меньше предыдущего')).toBeInTheDocument()
+  })
+})
+
+describe('MeterReadingsPage verification date', () => {
+  async function renderOn(today: Date, account: Account = ACCOUNT) {
+    mockAccount(account)
+    render(<MeterReadingsPage today={today} search="?account=000000000001" />)
+    await screen.findByText('Ввод показаний')
+  }
+
+  it('shows the dates and marks only the expired meter', async () => {
+    await renderOn(new Date(2026, 9, 18))
+
+    const valid = screen.getByText('Дата проверки: 01.01.2028')
+    const expired = screen.getByText('Дата проверки: 17.10.2026')
+    expect(within(valid).queryByText('Просрочено')).not.toBeInTheDocument()
+    expect(within(expired).getByText('Просрочено')).toBeInTheDocument()
+    expect(screen.getAllByText('Просрочено')).toHaveLength(1)
+  })
+
+  it('does not mark a meter on the last day of its verification period', async () => {
+    await renderOn(new Date(2026, 9, 17, 23, 59))
+
+    expect(screen.getByText('Дата проверки: 17.10.2026')).toBeInTheDocument()
+    expect(screen.queryByText('Просрочено')).not.toBeInTheDocument()
+  })
+
+  it('shows a dash and no mark for a meter without a verification date', async () => {
+    await renderOn(new Date(2026, 9, 18), { ...ACCOUNT, meters: [meter('Г-1', 'HOT', [10])] })
+
+    expect(screen.getAllByText('Дата проверки: —')).toHaveLength(2)
+    expect(screen.queryByText('Просрочено')).not.toBeInTheDocument()
+  })
+
+  it('shows a dash and no mark for a field without a meter', async () => {
+    await renderOn(new Date(2026, 9, 18), { ...ACCOUNT, meters: [] })
+    fireEvent.click(screen.getByRole('button', { name: '+ Добавить стояк' }))
+
+    expect(screen.getAllByText('Дата проверки: —')).toHaveLength(2)
+    expect(screen.queryByText('Просрочено')).not.toBeInTheDocument()
+  })
+
+  it('does not stop the user from sending a reading for an expired meter', async () => {
+    const submit = vi.spyOn(api, 'submitReadings').mockResolvedValue({ status: 'ok' })
+    await renderOn(new Date(2026, 9, 18))
+
+    fireEvent.change(screen.getByLabelText('Холодная вода, м³'), { target: { value: '520' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Отправить показания' }))
+
+    expect(await screen.findByText('Показания переданы')).toBeInTheDocument()
+    expect(submit).toHaveBeenCalledWith('000000000001', [{ meterNumber: 'Тест 2', value: '520' }])
   })
 })
 
