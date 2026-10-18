@@ -12,7 +12,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 
-/** Read-only view of the {@code water_meters} table. */
+/** A row of the {@code water_meters} table; new meters are created by migrations, not through this entity. */
 @Entity
 @Table(name = "water_meters")
 public class WaterMeterEntity {
@@ -31,10 +31,17 @@ public class WaterMeterEntity {
     @Column(nullable = false)
     private String number;
 
+    @Column(name = "is_test", nullable = false)
+    private boolean test;
+
     @OneToMany(mappedBy = "meter")
     private Set<MeterReadingEntity> readings = new HashSet<>();
 
     protected WaterMeterEntity() {
+    }
+
+    public boolean isTest() {
+        return test;
     }
 
     public Long getId() {
