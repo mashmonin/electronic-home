@@ -1,0 +1,78 @@
+databaseChangeLog:
+  - property:
+      name: test_apartment_id
+      value: "(SELECT id FROM addresses WHERE street = 'ул. Тестовая' AND house = 'Тест' AND apartment = '1')"
+  - property:
+      name: hot_meter_id
+      value: "(SELECT id FROM water_meters WHERE number = 'Тест 1' AND is_test AND address_id = ${test_apartment_id})"
+  - property:
+      name: cold_meter_id
+      value: "(SELECT id FROM water_meters WHERE number = 'Тест 2' AND is_test AND address_id = ${test_apartment_id})"
+
+  - changeSet:
+      id: 005-seed-test-water-meters
+      author: electronic-home
+      context: dev
+      changes:
+        - insert:
+            tableName: water_meters
+            columns:
+              - column: { name: address_id, valueComputed: "${test_apartment_id}" }
+              - column: { name: water_type, value: "HOT" }
+              - column: { name: number, value: "Тест 1" }
+              - column: { name: is_test, valueBoolean: true }
+        - insert:
+            tableName: water_meters
+            columns:
+              - column: { name: address_id, valueComputed: "${test_apartment_id}" }
+              - column: { name: water_type, value: "COLD" }
+              - column: { name: number, value: "Тест 2" }
+              - column: { name: is_test, valueBoolean: true }
+      rollback:
+        - sql:
+            sql: DELETE FROM water_meters WHERE is_test
+
+  - changeSet:
+      id: 005-seed-test-meter-readings
+      author: electronic-home
+      context: dev
+      changes:
+        # Hot water meter "Тест 1": 230.000 -> 245.300
+        - insert:
+            tableName: meter_readings
+            columns:
+              - column: { name: meter_id, valueComputed: "${hot_meter_id}" }
+              - column: { name: value, valueNumeric: 230.000 }
+              - column: { name: reading_date, valueDate: "2026-08-25" }
+              - column: { name: is_test, valueBoolean: true }
+        - insert:
+            tableName: meter_readings
+            columns:
+              - column: { name: meter_id, valueComputed: "${hot_meter_id}" }
+              - column: { name: value, valueNumeric: 245.300 }
+              - column: { name: reading_date, valueDate: "2026-09-25" }
+              - column:
+                  name: previous_reading_id
+                  valueComputed: "(SELECT id FROM meter_readings WHERE meter_id = ${hot_meter_id} AND value = 230.000)"
+              - column: { name: is_test, valueBoolean: true }
+        # Cold water meter "Тест 2": 498.500 -> 512.100
+        - insert:
+            tableName: meter_readings
+            columns:
+              - column: { name: meter_id, valueComputed: "${cold_meter_id}" }
+              - column: { name: value, valueNumeric: 498.500 }
+              - column: { name: reading_date, valueDate: "2026-08-25" }
+              - column: { name: is_test, valueBoolean: true }
+        - insert:
+            tableName: meter_readings
+            columns:
+              - column: { name: meter_id, valueComputed: "${cold_meter_id}" }
+              - column: { name: value, valueNumeric: 512.100 }
+              - column: { name: reading_date, valueDate: "2026-09-25" }
+              - column:
+                  name: previous_reading_id
+                  valueComputed: "(SELECT id FROM meter_readings WHERE meter_id = ${cold_meter_id} AND value = 498.500)"
+              - column: { name: is_test, valueBoolean: true }
+      rollback:
+        - sql:
+            sql: DELETE FROM meter_readings WHERE is_test

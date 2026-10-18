@@ -5,3 +5,7 @@ databaseChangeLog:
       file: db/changelog/changes/002-add-is-test-column.yaml
   - include:
       file: db/changelog/changes/003-seed-test-data.yaml
+  - include:
+      file: db/changelog/changes/004-create-meter-tables.yaml
+  - include:
+      file: db/changelog/changes/005-seed-test-meters.yaml

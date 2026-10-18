@@ -1,0 +1,119 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-create-water-meters
+      author: electronic-home
+      changes:
+        - createTable:
+            tableName: water_meters
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_water_meters
+              - column:
+                  name: address_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_water_meters_address
+                    references: addresses(id)
+              - column:
+                  name: water_type
+                  type: varchar(8)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: number
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_test
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: ALTER TABLE water_meters ADD CONSTRAINT ck_water_meters_water_type CHECK (water_type IN ('HOT', 'COLD'))
+        - addUniqueConstraint:
+            tableName: water_meters
+            columnNames: address_id, number
+            constraintName: uq_water_meters_address_number
+      rollback:
+        - dropTable:
+            tableName: water_meters
+
+  - changeSet:
+      id: 004-create-meter-readings
+      author: electronic-home
+      changes:
+        - createTable:
+            tableName: meter_readings
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_meter_readings
+              - column:
+                  name: meter_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_meter_readings_meter
+                    references: water_meters(id)
+              - column:
+                  name: value
+                  type: numeric(12,3)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reading_date
+                  type: date
+                  constraints:
+                    nullable: false
+              - column:
+                  name: previous_reading_id
+                  type: bigint
+              - column:
+                  name: is_test
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: ALTER TABLE meter_readings ADD CONSTRAINT ck_meter_readings_value CHECK (value >= 0)
+        - sql:
+            sql: ALTER TABLE meter_readings ADD CONSTRAINT ck_meter_readings_not_own_previous CHECK (previous_reading_id <> id)
+        # Target of the composite foreign key below: the previous reading must belong to the same meter.
+        - addUniqueConstraint:
+            tableName: meter_readings
+            columnNames: id, meter_id
+            constraintName: uq_meter_readings_id_meter
+        - sql:
+            sql: >
+              ALTER TABLE meter_readings ADD CONSTRAINT fk_meter_readings_previous
+              FOREIGN KEY (previous_reading_id, meter_id) REFERENCES meter_readings (id, meter_id)
+        # A reading is the previous one for at most one reading, and a meter has at most one first reading.
+        - addUniqueConstraint:
+            tableName: meter_readings
+            columnNames: previous_reading_id
+            constraintName: uq_meter_readings_previous
+        - sql:
+            sql: CREATE UNIQUE INDEX uq_meter_readings_first_per_meter ON meter_readings (meter_id) WHERE previous_reading_id IS NULL
+        - createIndex:
+            tableName: meter_readings
+            indexName: idx_meter_readings_meter_date
+            columns:
+              - column:
+                  name: meter_id
+              - column:
+                  name: reading_date
+      rollback:
+        - dropTable:
+            tableName: meter_readings
