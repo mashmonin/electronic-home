@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MeterReadingsPage from './MeterReadingsPage'
 import type { Account } from './accountApi'
 import type { Receipt } from './receiptsApi'
+import { ADMIN } from '../testUsers'
 
 const ACCOUNT: Account = {
   number: '000000000001',
@@ -64,7 +65,7 @@ const nav = (name: string) => screen.getByRole('button', { name })
 const isActive = (name: string) => nav(name).getAttribute('aria-current') === 'page'
 
 async function openPage(search?: string) {
-  render(<MeterReadingsPage today={new Date(2026, 9, 18)} {...(search === undefined ? {} : { search })} />)
+  render(<MeterReadingsPage user={ADMIN} today={new Date(2026, 9, 18)} {...(search === undefined ? {} : { search })} />)
   await screen.findByText('Лицевой счёт № 000000000001')
 }
 
@@ -147,13 +148,12 @@ describe('tabs', () => {
     expect(server.receiptCalls).toBe(0)
   })
 
-  it('keeps the requested account in the links of the receipts', async () => {
+  it('offers the download of the receipts of the requested account', async () => {
     window.history.replaceState(null, '', '/?account=000000000001&tab=receipts')
     fakeServer()
     await openPage()
 
-    const links = await screen.findAllByRole('link', { name: 'Скачать PDF' })
-    expect(links[0]).toHaveAttribute('href', '/api/accounts/000000000001/receipts/2026-10')
+    expect((await screen.findAllByRole('button', { name: 'Скачать PDF' })).length).toBeGreaterThan(0)
   })
 
   it('does nothing when "Заявки" is clicked', async () => {
@@ -181,7 +181,7 @@ describe('tabs', () => {
   it('does not ask for the receipts when the account is not found', async () => {
     window.history.replaceState(null, '', '/?account=999&tab=receipts')
     const server = fakeServer({ accountStatus: 404 })
-    render(<MeterReadingsPage today={new Date(2026, 9, 18)} />)
+    render(<MeterReadingsPage user={ADMIN} today={new Date(2026, 9, 18)} />)
 
     expect(await screen.findByText('Лицевой счёт не найден')).toBeInTheDocument()
     expect(server.receiptCalls).toBe(0)

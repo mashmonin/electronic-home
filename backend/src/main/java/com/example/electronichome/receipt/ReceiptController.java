@@ -11,6 +11,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -49,11 +50,13 @@ class ReceiptController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER') and @accountAccess.canAccess(authentication, #number)")
     ReceiptResponses.Items list(@PathVariable String number) {
         return service.list(number);
     }
 
     @GetMapping("/{month}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OWNER') and @accountAccess.canAccess(authentication, #number)")
     ResponseEntity<InputStreamResource> download(@PathVariable String number, @PathVariable String month) throws IOException {
         ReceiptService.Download file = service.download(number, month);
         return ResponseEntity.ok()

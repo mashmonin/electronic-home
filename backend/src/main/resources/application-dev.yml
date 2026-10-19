@@ -18,3 +18,8 @@ management:
 # Publishing of receipts in development; production has no token until RECEIPTS_ADMIN_TOKEN is set.
 receipts:
   admin-token: dev-admin-token
+
+# Only for development: a key from the repository protects nothing in production.
+auth:
+  jwt:
+    secret: dev-only-secret-key-change-me-0123456789

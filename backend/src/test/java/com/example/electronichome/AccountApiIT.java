@@ -51,6 +51,7 @@ class AccountApiIT {
 
     private HttpResponse<String> get(String number, String... headers) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/accounts/" + number));
+        request.header("Authorization", AuthSupport.adminBearer(jdbc, port));
         if (headers.length > 0) {
             request.headers(headers);
         }

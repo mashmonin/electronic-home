@@ -22,7 +22,7 @@ describe('submitReadings', () => {
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('/api/accounts/000000000001/readings')
     expect(init?.method).toBe('POST')
-    expect((init?.headers as Record<string, string>)['Content-Type']).toBe('application/json')
+    expect(new Headers(init?.headers).get('Content-Type')).toBe('application/json')
     expect(JSON.parse(String(init?.body))).toEqual({
       readings: [
         { meter_number: 'Тест 1', value: 250.125 },

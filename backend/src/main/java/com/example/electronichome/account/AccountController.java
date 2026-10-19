@@ -1,5 +1,6 @@
 package com.example.electronichome.account;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,6 +17,7 @@ class AccountController {
     }
 
     @GetMapping("/{number}")
+    @PreAuthorize("@accountAccess.canAccess(authentication, #number)")
     AccountResponse get(@PathVariable String number) {
         return service.getByNumber(number);
     }

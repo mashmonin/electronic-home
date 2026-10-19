@@ -4,6 +4,7 @@ import MeterReadingsPage from './MeterReadingsPage'
 import type { Account, AccountMeter } from './accountApi'
 import * as api from './readingsApi'
 import { validateReading } from './validation'
+import { ADMIN, OWNER } from '../testUsers'
 
 // Readings are given newest first; each one points to the next (older) one as its previous reading.
 function meter(number: string, type: 'HOT' | 'COLD', values: number[], verificationDate: string | null = null): AccountMeter {
@@ -43,7 +44,7 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 async function renderPage(search = '?account=000000000001', today = new Date(2026, 7, 10)) {
-  render(<MeterReadingsPage today={today} search={search} />)
+  render(<MeterReadingsPage user={ADMIN} today={today} search={search} />)
   await screen.findByRole('heading', { level: 1 })
 }
 
@@ -239,7 +240,7 @@ describe('reading period', () => {
 
   async function renderAccount(account: Account) {
     mockAccount(account)
-    render(<MeterReadingsPage today={new Date(2026, 9, 18)} search="?account=000000000001" />)
+    render(<MeterReadingsPage user={ADMIN} today={new Date(2026, 9, 18)} search="?account=000000000001" />)
     await screen.findByRole('heading', { level: 1 })
   }
 
@@ -336,7 +337,7 @@ describe('reading period', () => {
 
   it('does not decide anything by the date of the device', async () => {
     mockAccount(ACCOUNT)
-    render(<MeterReadingsPage today={new Date(2030, 0, 1)} search="?account=000000000001" />)
+    render(<MeterReadingsPage user={ADMIN} today={new Date(2030, 0, 1)} search="?account=000000000001" />)
     await screen.findByRole('heading', { level: 1 })
 
     expect(screen.getByText('Показания за октябрь')).toBeInTheDocument()
@@ -347,7 +348,7 @@ describe('reading period', () => {
 describe('verification date', () => {
   async function renderOn(today: Date, account: Account = ACCOUNT) {
     mockAccount(account)
-    render(<MeterReadingsPage today={today} search="?account=000000000001" />)
+    render(<MeterReadingsPage user={ADMIN} today={today} search="?account=000000000001" />)
     await screen.findByRole('heading', { level: 1 })
   }
 
@@ -405,48 +406,63 @@ describe('MeterReadingsPage account loading', () => {
   it('requests the account given in the address bar', async () => {
     const fetchMock = mockAccount({ ...ACCOUNT, number: '000000000002' })
     await renderPage('?account=000000000002')
-    expect(fetchMock).toHaveBeenCalledWith('/api/accounts/000000000002')
+    expect(fetchMock).toHaveBeenCalledWith('/api/accounts/000000000002', expect.anything())
     expect(screen.getByText('Лицевой счёт № 000000000002')).toBeInTheDocument()
   })
 
-  it('falls back to the default account number when the URL has none', async () => {
+  it('takes the account of the user when the URL has none', async () => {
     const fetchMock = mockAccount()
-    render(<MeterReadingsPage search="" defaultAccountNumber="000000000001" />)
+    render(<MeterReadingsPage user={OWNER} search="" />)
     await screen.findByRole('heading', { level: 1 })
-    expect(fetchMock).toHaveBeenCalledWith('/api/accounts/000000000001')
+    expect(fetchMock).toHaveBeenCalledWith('/api/accounts/000000000001', expect.anything())
+  })
+
+  it('ignores ?account= for an owner', async () => {
+    const fetchMock = mockAccount()
+    render(<MeterReadingsPage user={OWNER} search="?account=000000000002" />)
+    await screen.findByRole('heading', { level: 1 })
+    expect(fetchMock).toHaveBeenCalledWith('/api/accounts/000000000001', expect.anything())
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/accounts/000000000002', expect.anything())
+  })
+
+  it('shows a message when the server refuses the account', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 403 }))
+    render(<MeterReadingsPage user={OWNER} search="" />)
+    expect(await screen.findByText('Недостаточно прав')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
   })
 
   it('shows a spinner and no content while loading', () => {
     vi.spyOn(globalThis, 'fetch').mockReturnValue(new Promise(() => {}))
-    const { container } = render(<MeterReadingsPage search="?account=000000000001" />)
+    const { container } = render(<MeterReadingsPage user={ADMIN} search="?account=000000000001" />)
     expect(container.querySelector('.ant-spin')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
   })
 
   it('shows a message when the account is not found', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 404 }))
-    render(<MeterReadingsPage search="?account=999" />)
+    render(<MeterReadingsPage user={ADMIN} search="?account=999" />)
     expect(await screen.findByText('Лицевой счёт не найден')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
   })
 
   it('shows a message on a network error', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network'))
-    render(<MeterReadingsPage search="?account=000000000001" />)
+    render(<MeterReadingsPage user={ADMIN} search="?account=000000000001" />)
     expect(await screen.findByText('Не удалось загрузить данные')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
   })
 
   it('shows a message on a server error', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 500 }))
-    render(<MeterReadingsPage search="?account=000000000001" />)
+    render(<MeterReadingsPage user={ADMIN} search="?account=000000000001" />)
     expect(await screen.findByText('Не удалось загрузить данные')).toBeInTheDocument()
   })
 
-  it('asks for an account number when none is given', async () => {
+  it('tells when no account is linked to the user', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    render(<MeterReadingsPage search="" />)
-    expect(await screen.findByText(/Лицевой счёт не указан/)).toBeInTheDocument()
+    render(<MeterReadingsPage user={{ ...OWNER, accounts: [] }} search="" />)
+    expect(await screen.findByText('К вашей учётной записи не привязан лицевой счёт')).toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

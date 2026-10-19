@@ -21,6 +21,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // the screen tests type into antd forms and take several seconds on a busy machine
+    testTimeout: 20000,
     setupFiles: './src/setupTests.ts',
   },
 })

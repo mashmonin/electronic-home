@@ -1,6 +1,6 @@
 import { Alert, Button, Collapse, Flex, Spin, Typography } from 'antd'
 import { useEffect, useState } from 'react'
-import { type Receipt, fetchReceipts, receiptUrl } from './receiptsApi'
+import { type Receipt, downloadReceipt, fetchReceipts } from './receiptsApi'
 import { formatMoney, formatReceiptMonth } from './receiptFormat'
 
 type State = { kind: 'loading' } | { kind: 'ready'; receipts: Receipt[] } | { kind: 'error' }
@@ -18,10 +18,33 @@ function Amount({ label, amount }: { label: string; amount: number | null }) {
   )
 }
 
+// Hands the downloaded file to the browser as if a link to it had been followed.
+function saveFile(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 // The receipts of the account, newest first, as an accordion: a panel per month with the two amounts and the PDF link.
 export default function ReceiptsTab({ accountNumber }: Props) {
   const [state, setState] = useState<State>({ kind: 'loading' })
   const [attempt, setAttempt] = useState(0)
+  const [downloading, setDownloading] = useState<string | null>(null)
+  const [downloadFailed, setDownloadFailed] = useState(false)
+
+  const download = async (month: string) => {
+    setDownloading(month)
+    setDownloadFailed(false)
+    const result = await downloadReceipt(accountNumber, month)
+    setDownloading(null)
+    if (result.status === 'ok') saveFile(result.blob, result.filename)
+    else setDownloadFailed(true)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -53,6 +76,7 @@ export default function ReceiptsTab({ accountNumber }: Props) {
           }
         />
       )}
+      {downloadFailed && <Alert type="error" showIcon message="Не удалось скачать квитанцию" />}
       {state.kind === 'ready' && state.receipts.length === 0 && (
         <Alert type="info" showIcon message="Квитанции пока не опубликованы" />
       )}
@@ -67,7 +91,12 @@ export default function ReceiptsTab({ accountNumber }: Props) {
               <Flex vertical gap={12}>
                 <Amount label="Капитальный ремонт" amount={receipt.capital_repair_amount} />
                 <Amount label="Коммунальные услуги" amount={receipt.utilities_amount} />
-                <Button type="primary" href={receiptUrl(accountNumber, receipt.month)} download style={{ alignSelf: 'flex-start' }}>
+                <Button
+                  type="primary"
+                  loading={downloading === receipt.month}
+                  onClick={() => download(receipt.month)}
+                  style={{ alignSelf: 'flex-start' }}
+                >
                   Скачать PDF
                 </Button>
               </Flex>

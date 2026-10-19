@@ -1,0 +1,29 @@
+databaseChangeLog:
+  - changeSet:
+      id: 010-seed-test-user
+      author: electronic-home
+      context: dev
+      changes:
+        # the password is in README.md; only its BCrypt hash is stored
+        - insert:
+            tableName: users
+            columns:
+              - column: { name: login, value: "owner" }
+              - column: { name: password_hash, value: "$2a$10$hsWDDl1Wd/qj9IQUcZNvf.vbk1/b1zvH1f3/yNPVYE2sXMPkO6JYW" }
+              - column: { name: role, value: "OWNER" }
+              - column: { name: is_test, valueBoolean: true }
+        - insert:
+            tableName: user_accounts
+            columns:
+              - column:
+                  name: user_id
+                  valueComputed: "(SELECT id FROM users WHERE login = 'owner' AND is_test)"
+              - column:
+                  name: account_id
+                  valueComputed: "(SELECT id FROM accounts WHERE number = '000000000001')"
+              - column: { name: is_test, valueBoolean: true }
+      rollback:
+        - sql:
+            sql: DELETE FROM user_accounts WHERE is_test
+        - sql:
+            sql: DELETE FROM users WHERE is_test

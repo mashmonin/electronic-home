@@ -1,5 +1,6 @@
 import { Alert, Flex, Grid, Layout, Spin } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
+import type { Me } from '../auth/authApi'
 import AppHeader from './AppHeader'
 import ContactCard from './ContactCard'
 import ReadingsForm from './ReadingsForm'
@@ -13,24 +14,29 @@ type State =
   | { kind: 'loading' }
   | { kind: 'ready'; account: Account }
   | { kind: 'not-found' }
+  | { kind: 'forbidden' }
   | { kind: 'error' }
   | { kind: 'no-account' }
 
 interface Props {
+  user: Me
+  onSignOut?: () => void
   today?: Date
   search?: string
-  defaultAccountNumber?: string
 }
 
 export default function MeterReadingsPage({
+  user,
+  onSignOut = () => {},
   today = new Date(),
   search = window.location.search,
-  defaultAccountNumber = import.meta.env.VITE_DEFAULT_ACCOUNT_NUMBER,
 }: Props) {
   const [state, setState] = useState<State>({ kind: 'loading' })
-  const [tab, setTab] = useState<Tab>(() => tabFromSearch(search))
+  const [requestedTab, setTab] = useState<Tab>(() => tabFromSearch(search))
+  // a resident has no receipts; the server refuses them too
+  const tab: Tab = user.role === 'RESIDENT' ? 'readings' : requestedTab
   const wide = Grid.useBreakpoint().md ?? false
-  const accountNumber = resolveAccountNumber(search, defaultAccountNumber)
+  const accountNumber = resolveAccountNumber(search, user)
 
   useEffect(() => {
     if (!accountNumber) {
@@ -71,8 +77,9 @@ export default function MeterReadingsPage({
   if (state.kind !== 'ready') {
     const message = {
       'not-found': 'Лицевой счёт не найден',
+      forbidden: 'Недостаточно прав',
       error: 'Не удалось загрузить данные',
-      'no-account': 'Лицевой счёт не указан. Добавьте в адрес параметр ?account=номер',
+      'no-account': 'К вашей учётной записи не привязан лицевой счёт',
     }[state.kind]
     return (
       <Layout style={{ minHeight: '100vh' }}>
@@ -87,7 +94,7 @@ export default function MeterReadingsPage({
   const meters = toMeters(account.meters, today)
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <AppHeader account={account} activeTab={tab} onTabChange={changeTab} />
+      <AppHeader account={account} user={user} activeTab={tab} onTabChange={changeTab} onSignOut={onSignOut} />
       <Layout.Content style={{ padding: wide ? '38px 40px' : '24px 16px' }}>
         <Flex vertical gap={24} style={{ maxWidth: 700, margin: '0 auto' }}>
           {tab === 'receipts' ? (

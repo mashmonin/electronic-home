@@ -1,3 +1,6 @@
+import { apiFetch } from '../auth/apiFetch'
+import type { Me } from '../auth/authApi'
+
 export interface AccountReading {
   value: number
   reading_date: string
@@ -40,12 +43,14 @@ export interface Account {
 export type AccountLoadResult =
   | { status: 'ok'; account: Account }
   | { status: 'not-found' }
+  | { status: 'forbidden' }
   | { status: 'error' }
 
 export async function fetchAccount(number: string): Promise<AccountLoadResult> {
   try {
-    const response = await fetch(`/api/accounts/${encodeURIComponent(number)}`)
+    const response = await apiFetch(`/api/accounts/${encodeURIComponent(number)}`)
     if (response.status === 404) return { status: 'not-found' }
+    if (response.status === 403) return { status: 'forbidden' }
     if (!response.ok) return { status: 'error' }
     return { status: 'ok', account: (await response.json()) as Account }
   } catch {
@@ -53,8 +58,8 @@ export async function fetchAccount(number: string): Promise<AccountLoadResult> {
   }
 }
 
-// The account number comes from `?account=`; development builds may fall back to a default one.
-export function resolveAccountNumber(search: string, fallback?: string): string | undefined {
-  const fromUrl = new URLSearchParams(search).get('account')?.trim()
-  return fromUrl || fallback?.trim() || undefined
+// The account is the first one of the user; an administrator may pick another with `?account=`.
+export function resolveAccountNumber(search: string, user: Me): string | undefined {
+  const fromUrl = user.role === 'ADMIN' ? new URLSearchParams(search).get('account')?.trim() : undefined
+  return fromUrl || user.accounts[0]
 }

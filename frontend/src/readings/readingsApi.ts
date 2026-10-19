@@ -1,9 +1,10 @@
+import { apiFetch } from '../auth/apiFetch'
 import type { ReadingServerError, ReadingToSend, SubmitResult } from './types'
 
 // Saves new readings of the account's meters; never throws, failures are reported in the result.
 export async function submitReadings(accountNumber: string, readings: ReadingToSend[]): Promise<SubmitResult> {
   try {
-    const response = await fetch(`/api/accounts/${encodeURIComponent(accountNumber)}/readings`, {
+    const response = await apiFetch(`/api/accounts/${encodeURIComponent(accountNumber)}/readings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

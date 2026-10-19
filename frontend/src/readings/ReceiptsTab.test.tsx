@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ReceiptsTab from './ReceiptsTab'
 import type { Receipt } from './receiptsApi'
@@ -65,7 +65,7 @@ describe('ReceiptsTab as an accordion', () => {
 
     const rows = (await screen.findAllByText('—')).map((dash) => dash.closest('.ant-flex')?.textContent)
     expect(rows).toEqual(['Капитальный ремонт—', 'Коммунальные услуги—'])
-    expect(screen.getAllByRole('link', { name: 'Скачать PDF' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: 'Скачать PDF' }).length).toBeGreaterThan(0)
   })
 
   it('shows zero and big amounts', async () => {
@@ -94,18 +94,36 @@ describe('ReceiptsTab as an accordion', () => {
     expect(text).not.toMatch(/опубликован/i)
   })
 
-  it('puts the download link inside the panel with the address of its month', async () => {
-    mockList(RECEIPTS)
+  it('downloads the PDF of the month with the token and hands it to the browser as a file', async () => {
+    const fetchMock = mockList(RECEIPTS)
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ receipts: RECEIPTS }))).mockResolvedValue(new Response('%PDF-1.4'))
+    const createObjectURL = vi.fn(() => 'blob:receipt')
+    const revokeObjectURL = vi.fn()
+    Object.assign(URL, { createObjectURL, revokeObjectURL })
+    const clicked: { download: string; href: string }[] = []
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      clicked.push({ download: this.download, href: this.href })
+    })
     render(<ReceiptsTab accountNumber="000000000001" />)
     await screen.findByText('Октябрь 2026')
 
-    const link = screen.getByRole('link', { name: 'Скачать PDF' })
-    expect(link).toHaveAttribute('href', '/api/accounts/000000000001/receipts/2026-10')
-    expect(link).toHaveAttribute('download')
+    fireEvent.click(screen.getByRole('button', { name: 'Скачать PDF' }))
 
-    fireEvent.click(panel('Сентябрь 2026'))
-    const links = await screen.findAllByRole('link', { name: 'Скачать PDF' })
-    expect(links.map((l) => l.getAttribute('href'))).toContain('/api/accounts/000000000001/receipts/2026-09')
+    await waitFor(() => expect(clicked).toHaveLength(1))
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/accounts/000000000001/receipts/2026-10', expect.anything())
+    expect(clicked[0]).toEqual({ download: 'receipt-000000000001-2026-10.pdf', href: 'blob:receipt' })
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:receipt')
+  })
+
+  it('says so when the file cannot be downloaded', async () => {
+    const fetchMock = mockList(RECEIPTS)
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ receipts: RECEIPTS }))).mockResolvedValue(new Response(null, { status: 500 }))
+    render(<ReceiptsTab accountNumber="000000000001" />)
+    await screen.findByText('Октябрь 2026')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Скачать PDF' }))
+
+    expect(await screen.findByText('Не удалось скачать квитанцию')).toBeInTheDocument()
   })
 
   it('has the title "Квитанции" as the heading of the page, aligned left', async () => {
@@ -123,7 +141,7 @@ describe('ReceiptsTab as an accordion', () => {
     await screen.findByText('Октябрь 2026')
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(fetchMock).toHaveBeenCalledWith('/api/accounts/000000000002/receipts')
+    expect(fetchMock).toHaveBeenCalledWith('/api/accounts/000000000002/receipts', expect.anything())
   })
 })
 
@@ -134,7 +152,7 @@ describe('ReceiptsTab states', () => {
 
     expect(container.querySelector('.ant-spin')).toBeInTheDocument()
     expect(screen.queryByText('Квитанции пока не опубликованы')).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Скачать PDF' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Скачать PDF' })).not.toBeInTheDocument()
   })
 
   it('says so when there are no receipts', async () => {
@@ -142,7 +160,7 @@ describe('ReceiptsTab states', () => {
     render(<ReceiptsTab accountNumber="000000000001" />)
 
     expect(await screen.findByText('Квитанции пока не опубликованы')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Скачать PDF' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Скачать PDF' })).not.toBeInTheDocument()
     expect(screen.queryByText('Капитальный ремонт')).not.toBeInTheDocument()
   })
 

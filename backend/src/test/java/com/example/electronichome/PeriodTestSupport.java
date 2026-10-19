@@ -43,7 +43,8 @@ final class PeriodTestSupport {
     }
 
     static HttpResponse<String> get(int port, String account) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/accounts/" + account)).build();
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/accounts/" + account))
+                .header("Authorization", AuthSupport.adminBearer(port)).build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 
@@ -51,6 +52,7 @@ final class PeriodTestSupport {
         String body = "{\"readings\":[" + String.join(",", readings) + "]}";
         HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/accounts/" + account + "/readings"))
                 .header("Content-Type", "application/json")
+                .header("Authorization", AuthSupport.adminBearer(port))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());

@@ -1,12 +1,15 @@
-import { BellOutlined, HomeOutlined, UserOutlined } from '@ant-design/icons'
+import { BellOutlined, HomeOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
 import { Button, Flex, Grid, Layout, Popover, Typography } from 'antd'
+import { type Me, ROLE_NAMES } from '../auth/authApi'
 import type { Account } from './accountApi'
 import type { Tab } from './tabs'
 
 interface Props {
   account: Account
+  user: Me
   activeTab: Tab
   onTabChange: (tab: Tab) => void
+  onSignOut: () => void
 }
 
 const ICON_STYLE = { fontSize: 18, color: '#8c8c8c' }
@@ -25,16 +28,28 @@ function NavItem({ label, active, onClick }: { label: string; active: boolean; o
   )
 }
 
-export default function AppHeader({ account, activeTab, onTabChange }: Props) {
+export default function AppHeader({ account, user, activeTab, onTabChange, onSignOut }: Props) {
   const wide = Grid.useBreakpoint().md ?? false
 
-  const owners = (
-    <Flex vertical gap={4}>
+  const profile = (
+    <Flex vertical gap={12}>
+      <Flex vertical>
+        <Typography.Text strong>{user.login}</Typography.Text>
+        <Typography.Text type="secondary">{ROLE_NAMES[user.role]}</Typography.Text>
+      </Flex>
+      <Flex vertical gap={4}>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          Совладельцы счёта
+        </Typography.Text>
       {account.owners.length === 0 ? (
         <Typography.Text type="secondary">Совладельцы не указаны</Typography.Text>
       ) : (
         account.owners.map((owner) => <Typography.Text key={owner.full_name}>{owner.full_name}</Typography.Text>)
       )}
+      </Flex>
+      <Button onClick={onSignOut} icon={<LogoutOutlined />}>
+        Выйти
+      </Button>
     </Flex>
   )
 
@@ -55,13 +70,15 @@ export default function AppHeader({ account, activeTab, onTabChange }: Props) {
           </Typography.Text>
           <Flex gap={24}>
             <NavItem label="Показания" active={activeTab === 'readings'} onClick={() => onTabChange('readings')} />
-            <NavItem label="Квитанции" active={activeTab === 'receipts'} onClick={() => onTabChange('receipts')} />
+            {user.role !== 'RESIDENT' && (
+              <NavItem label="Квитанции" active={activeTab === 'receipts'} onClick={() => onTabChange('receipts')} />
+            )}
             <Typography.Text type="secondary">Заявки</Typography.Text>
           </Flex>
         </Flex>
         <Flex align="center" gap={18}>
           <BellOutlined aria-label="Уведомления" style={ICON_STYLE} />
-          <Popover title="Совладельцы счёта" content={owners} trigger="click" placement="bottomRight">
+          <Popover title="Профиль" content={profile} trigger="click" placement="bottomRight">
             <Button
               type="text"
               aria-label="Профиль"

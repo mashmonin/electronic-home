@@ -30,6 +30,9 @@ class ReceiptsPublishingDisabledIT {
     @Value("${local.server.port}")
     int port;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    org.springframework.jdbc.core.JdbcTemplate jdbc;
+
     private HttpResponse<String> put(String token) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/accounts/000000000001/receipts/2026-09"))
                 .header("Content-Type", "application/pdf")
@@ -49,7 +52,8 @@ class ReceiptsPublishingDisabledIT {
 
     @Test
     void readingStillWorks() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/accounts/000000000001/receipts")).build();
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/accounts/000000000001/receipts"))
+                .header("Authorization", AuthSupport.adminBearer(jdbc, port)).build();
 
         HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
 

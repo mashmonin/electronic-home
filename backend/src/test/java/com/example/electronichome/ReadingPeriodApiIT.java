@@ -56,6 +56,11 @@ class ReadingPeriodApiIT {
     @Autowired
     JdbcTemplate jdbc;
 
+    @BeforeEach
+    void adminUser() throws Exception {
+        AuthSupport.adminBearer(jdbc, port);
+    }
+
     @Autowired
     MutableClock clock;
 

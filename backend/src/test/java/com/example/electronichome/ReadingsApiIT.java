@@ -72,13 +72,15 @@ class ReadingsApiIT {
     private HttpResponse<String> post(String account, String body) throws Exception {
         HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/accounts/" + account + "/readings"))
                 .header("Content-Type", "application/json")
+                .header("Authorization", AuthSupport.adminBearer(jdbc, port))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> get(String account) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/accounts/" + account)).build();
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/accounts/" + account))
+                .header("Authorization", AuthSupport.adminBearer(jdbc, port)).build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 

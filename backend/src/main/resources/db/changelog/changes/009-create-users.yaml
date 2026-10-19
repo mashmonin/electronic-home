@@ -1,0 +1,80 @@
+databaseChangeLog:
+  - changeSet:
+      id: 009-create-users
+      author: electronic-home
+      changes:
+        - createTable:
+            tableName: users
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_users
+              - column:
+                  name: login
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              # BCrypt hash; the password itself is never stored
+              - column:
+                  name: password_hash
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: role
+                  type: varchar(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: enabled
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_test
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: ALTER TABLE users ADD CONSTRAINT ck_users_role CHECK (role IN ('ADMIN', 'OWNER', 'RESIDENT'))
+        - sql:
+            sql: CREATE UNIQUE INDEX uq_users_login_lower ON users (lower(login))
+        - createTable:
+            tableName: user_accounts
+            columns:
+              - column:
+                  name: user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_user_accounts_user
+                    references: users(id)
+                    deleteCascade: true
+              - column:
+                  name: account_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_user_accounts_account
+                    references: accounts(id)
+              - column:
+                  name: is_test
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: user_accounts
+            columnNames: user_id, account_id
+            constraintName: pk_user_accounts
+      rollback:
+        - dropTable:
+            tableName: user_accounts
+        - dropTable:
+            tableName: users

@@ -144,12 +144,14 @@ class ReceiptsApiIT {
     }
 
     private HttpResponse<byte[]> download(String account, String month) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(uri("/api/accounts/" + account + "/receipts/" + URLEncoder.encode(month, StandardCharsets.UTF_8))).build();
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/accounts/" + account + "/receipts/" + URLEncoder.encode(month, StandardCharsets.UTF_8)))
+                .header("Authorization", AuthSupport.adminBearer(jdbc, port)).build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofByteArray());
     }
 
     private HttpResponse<String> list(String account) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(uri("/api/accounts/" + account + "/receipts")).build();
+        HttpRequest request = HttpRequest.newBuilder(uri("/api/accounts/" + account + "/receipts"))
+                .header("Authorization", AuthSupport.adminBearer(jdbc, port)).build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 

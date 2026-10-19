@@ -22,3 +22,7 @@ management:
   endpoint:
     health:
       show-details: never
+
+auth:
+  jwt:
+    secret: ${JWT_SECRET}
