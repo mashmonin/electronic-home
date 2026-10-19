@@ -29,3 +29,5 @@ databaseChangeLog:
       file: db/changelog/changes/014-request-number.yaml
   - include:
       file: db/changelog/changes/015-drop-request-status.yaml
+  - include:
+      file: db/changelog/changes/016-create-request-attachments.yaml

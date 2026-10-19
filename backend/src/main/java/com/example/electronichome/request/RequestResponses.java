@@ -38,7 +38,15 @@ final class RequestResponses {
     }
 
     record Message(
-            long id, String text, @JsonProperty("created_at") Instant createdAt, MessageAuthor author, boolean mine) {
+            long id,
+            String text,
+            @JsonProperty("created_at") Instant createdAt,
+            MessageAuthor author,
+            boolean mine,
+            List<Attachment> attachments) {
+    }
+
+    record Attachment(long id, String name, long size, @JsonProperty("content_type") String contentType) {
     }
 
     record Messages(List<Message> messages) {

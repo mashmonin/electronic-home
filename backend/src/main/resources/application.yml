@@ -6,6 +6,11 @@ spring:
         enabled: false
   application:
     name: electronic-home
+  servlet:
+    multipart:
+      # the files of a message: 10 MB each, 25 MB together (the service checks the real sizes too)
+      max-file-size: 10MB
+      max-request-size: 26MB
   jpa:
     open-in-view: false
     hibernate:
@@ -19,15 +24,24 @@ readings:
     closing-day: 25
     enforced: true
 
-# Receipts: PDF files on a directory (a volume in Docker), see README. Publishing needs RECEIPTS_ADMIN_TOKEN.
+# Receipts: PDF files in the object storage (S3 API), see README. Publishing needs RECEIPTS_ADMIN_TOKEN.
 receipts:
-  storage:
-    path: ${RECEIPTS_STORAGE_PATH:./data/receipts}
   max-size: ${RECEIPTS_MAX_SIZE:5MB}
+
+# The object storage: the receipts and the files attached to the messages of the requests. The address and the keys are
+# set by the profile (dev has keys for development, prod has none until S3_ACCESS_KEY and S3_SECRET_KEY are given).
+storage:
+  s3:
+    region: ${S3_REGION:us-east-1}
+    receipts-bucket: ${S3_RECEIPTS_BUCKET:electronic-home-receipts}
+    attachments-bucket: ${S3_ATTACHMENTS_BUCKET:electronic-home-attachments}
 
 server:
   port: 8080
   forward-headers-strategy: framework
+  tomcat:
+    # a rejected upload is read to the end, so that the client gets the answer 413 and not a broken connection
+    max-swallow-size: 30MB
 
 management:
   endpoints:

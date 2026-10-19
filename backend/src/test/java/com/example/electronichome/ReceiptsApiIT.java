@@ -10,7 +10,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HexFormat;
@@ -42,6 +41,13 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import com.example.electronichome.PeriodTestSupport.MutableClock;
 
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
+import software.amazon.awssdk.services.s3.model.S3Object;
+
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -54,15 +60,7 @@ class ReceiptsApiIT {
     private static final String ACCOUNT = "000000000001";
     private static final String OTHER_ACCOUNT = "000000000098";
     private static final String TOKEN = "dev-admin-token";
-    private static final Path DIRECTORY = createDirectory();
-
-    private static Path createDirectory() {
-        try {
-            return Files.createTempDirectory("receipts-it");
-        } catch (IOException e) {
-            throw new IllegalStateException(e);
-        }
-    }
+    private static String receiptsBucket;
 
     @TestConfiguration
     static class ClockConfig {
@@ -79,7 +77,7 @@ class ReceiptsApiIT {
 
     @DynamicPropertySource
     static void storage(DynamicPropertyRegistry registry) {
-        registry.add("receipts.storage.path", DIRECTORY::toString);
+        receiptsBucket = SeaweedFsTestContainer.register(registry)[0];
     }
 
     @Value("${local.server.port}")
@@ -87,6 +85,9 @@ class ReceiptsApiIT {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    S3Client s3;
 
     @Autowired
     MutableClock clock;
@@ -102,10 +103,8 @@ class ReceiptsApiIT {
         Long address = jdbc.queryForObject(
                 "INSERT INTO addresses (street, house, apartment) VALUES ('ул. Тестовая', 'Тест', '98') RETURNING id", Long.class);
         jdbc.update("INSERT INTO accounts (number, address_id) VALUES (?, ?)", OTHER_ACCOUNT, address);
-        try (Stream<Path> files = Files.list(DIRECTORY)) {
-            for (Path file : files.toList()) {
-                Files.deleteIfExists(file);
-            }
+        for (String key : filesInStorage()) {
+            s3.deleteObject(DeleteObjectRequest.builder().bucket(receiptsBucket).key(key).build());
         }
     }
 
@@ -155,10 +154,18 @@ class ReceiptsApiIT {
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 
-    private List<String> filesInStorage() throws IOException {
-        try (Stream<Path> files = Files.list(DIRECTORY)) {
-            return files.map(f -> f.getFileName().toString()).sorted().toList();
+    // the keys of the objects in the bucket of the receipts (a bucket that is not made yet is empty)
+    private List<String> filesInStorage() {
+        try {
+            return s3.listObjectsV2(ListObjectsV2Request.builder().bucket(receiptsBucket).build()).contents().stream()
+                    .map(S3Object::key).sorted().toList();
+        } catch (NoSuchBucketException e) {
+            return List.of();
         }
+    }
+
+    private byte[] objectContent(String key) {
+        return s3.getObjectAsBytes(GetObjectRequest.builder().bucket(receiptsBucket).key(key).build()).asByteArray();
     }
 
     private int rows() {
@@ -205,7 +212,7 @@ class ReceiptsApiIT {
         assertThat(row.get("size_bytes")).isEqualTo((long) content.length);
         assertThat(row.get("sha256")).isEqualTo(sha256(content));
         assertThat(filesInStorage()).containsExactly((String) row.get("file_key"));
-        assertThat(Files.readAllBytes(DIRECTORY.resolve((String) row.get("file_key")))).isEqualTo(content);
+        assertThat(objectContent((String) row.get("file_key"))).isEqualTo(content);
     }
 
     @Test
@@ -359,7 +366,7 @@ class ReceiptsApiIT {
     @Test
     void downloadIsNotFoundWhenTheFileIsLost() throws Exception {
         publish(ACCOUNT, "2026-10", pdf("x"));
-        Files.delete(DIRECTORY.resolve(jdbc.queryForObject("SELECT file_key FROM receipts", String.class)));
+        s3.deleteObject(DeleteObjectRequest.builder().bucket(receiptsBucket).key(jdbc.queryForObject("SELECT file_key FROM receipts", String.class)).build());
 
         assertThat(download(ACCOUNT, "2026-10").statusCode()).isEqualTo(404);
         assertThat(rows()).isEqualTo(1);

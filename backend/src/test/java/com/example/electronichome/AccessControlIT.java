@@ -31,7 +31,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 // Who may do what: the roles, the links to accounts, and the order 401 -> 403 -> 404.
 @Testcontainers
 @ActiveProfiles("dev")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {"receipts.admin-token=it-admin-token", "receipts.storage.path=${java.io.tmpdir}/access-control-it"})
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "receipts.admin-token=it-admin-token")
 class AccessControlIT {
 
     private static final String ACCOUNT = "000000000001";
@@ -39,6 +39,11 @@ class AccessControlIT {
     @Container
     @ServiceConnection
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16");
+
+    @org.springframework.test.context.DynamicPropertySource
+    static void storage(org.springframework.test.context.DynamicPropertyRegistry registry) {
+        SeaweedFsTestContainer.register(registry);
+    }
 
     @Value("${local.server.port}")
     int port;

@@ -8,10 +8,20 @@ services:
     ports:
       - "127.0.0.1:5435:5432"
 
+  # Keys for development only; the port is open on localhost for the backend that is started from the IDE.
+  s3:
+    environment:
+      S3_ACCESS_KEY: electronic-home-dev
+      S3_SECRET_KEY: electronic-home-dev-secret
+    ports:
+      - "127.0.0.1:8333:8333"
+
   backend:
     environment:
       SPRING_PROFILES_ACTIVE: dev
       DB_URL: jdbc:postgresql://postgres:5432/electronic_home
+      S3_ACCESS_KEY: electronic-home-dev
+      S3_SECRET_KEY: electronic-home-dev-secret
 
   frontend:
     image: node:22-alpine

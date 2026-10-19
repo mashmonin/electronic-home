@@ -21,12 +21,17 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 // can publish, reading works.
 @Testcontainers
 @ActiveProfiles("dev")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {"receipts.admin-token=", "receipts.storage.path=${java.io.tmpdir}/publishing-disabled-it"})
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "receipts.admin-token=")
 class ReceiptsPublishingDisabledIT {
 
     @Container
     @ServiceConnection
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16");
+
+    @org.springframework.test.context.DynamicPropertySource
+    static void storage(org.springframework.test.context.DynamicPropertyRegistry registry) {
+        SeaweedFsTestContainer.register(registry);
+    }
 
     @Value("${local.server.port}")
     int port;

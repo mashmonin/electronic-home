@@ -12,16 +12,39 @@ services:
       timeout: 3s
       retries: 10
 
+  # The object storage (S3 API) for the receipts and the attachments of the chats. The keys of the application come
+  # from S3_ACCESS_KEY / S3_SECRET_KEY (set in the environment files); letters, digits and - _ . + = / only.
+  s3:
+    image: chrislusf/seaweedfs:4.48
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        printf '{"identities":[{"name":"app","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY" > /tmp/s3.json
+        exec /entrypoint.sh server -dir=/data -s3 -s3.config=/tmp/s3.json -master.volumeSizeLimitMB=1024
+    volumes:
+      - s3_data:/data
+    healthcheck:
+      # the master answers and the S3 port is open (the server listens on the address of the container)
+      test: ["CMD-SHELL", "IP=$$(hostname -i); wget -qO- http://$$IP:9333/cluster/status >/dev/null && nc -z $$IP 8333"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   backend:
     build: ./backend
     environment:
-      RECEIPTS_STORAGE_PATH: /data/receipts
+      S3_ENDPOINT: http://s3:8333
+      # the files of the receipts that were kept on a volume are copied into the storage once (read only)
+      RECEIPTS_MIGRATION_SOURCE_PATH: /data/receipts-legacy
     volumes:
-      - receipts_data:/data/receipts
+      - receipts_data:/data/receipts-legacy:ro
     depends_on:
       postgres:
+        condition: service_healthy
+      s3:
         condition: service_healthy
 
 volumes:
   postgres_data:
   receipts_data:
+  s3_data:

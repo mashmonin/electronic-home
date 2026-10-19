@@ -25,6 +25,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-liquibase")
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
+    implementation(platform("software.amazon.awssdk:bom:2.56.0"))
+    implementation("software.amazon.awssdk:s3")
+    implementation("software.amazon.awssdk:apache-client")
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")

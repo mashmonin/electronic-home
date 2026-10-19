@@ -16,8 +16,18 @@ management:
       show-details: always
 
 # Publishing of receipts in development; production has no token until RECEIPTS_ADMIN_TOKEN is set.
+# The files that were kept in a directory before the object storage are copied into it once at the start.
 receipts:
   admin-token: dev-admin-token
+  migration:
+    source-path: ${RECEIPTS_MIGRATION_SOURCE_PATH:./data/receipts}
+
+# The storage of docker-compose.dev.yml (port 8333 on localhost); keys for development only.
+storage:
+  s3:
+    endpoint: ${S3_ENDPOINT:http://localhost:8333}
+    access-key: ${S3_ACCESS_KEY:electronic-home-dev}
+    secret-key: ${S3_SECRET_KEY:electronic-home-dev-secret}
 
 # Only for development: a key from the repository protects nothing in production.
 auth:

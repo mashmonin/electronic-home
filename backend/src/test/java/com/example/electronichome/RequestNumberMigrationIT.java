@@ -2,8 +2,6 @@ package com.example.electronichome;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -47,9 +45,10 @@ class RequestNumberMigrationIT {
         }
 
         List<String> numbers = jdbc.queryForList("SELECT number FROM requests ORDER BY id", String.class);
-        String today = LocalDate.now().format(DateTimeFormatter.ofPattern("ddMMyy"));
+        // the test request of the migration 013 is made "an hour ago": its date is the date of its creation, not always today
+        String seedDay = jdbc.queryForObject("SELECT to_char(created_at, 'DDMMYY') FROM requests WHERE is_test", String.class);
         assertThat(numbers).hasSize(3);
-        assertThat(numbers.get(0)).isEqualTo("О-" + today + "-0001");
+        assertThat(numbers.get(0)).isEqualTo("О-" + seedDay + "-0001");
         assertThat(numbers.get(1)).isEqualTo("О-050326-0002");
         assertThat(numbers.get(2)).isEqualTo("О-191026-0003");
         assertThat(jdbc.queryForObject("SELECT nextval('request_number_seq')", Long.class)).isEqualTo(4L);

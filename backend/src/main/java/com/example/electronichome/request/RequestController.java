@@ -1,6 +1,15 @@
 package com.example.electronichome.request;
 
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
@@ -10,8 +19,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /** Requests of the owners and the chats under them. A resident has none: every method refuses him. */
 @RestController
@@ -37,11 +48,23 @@ class RequestController {
         return new RequestResponses.Items(service.list(caller(authentication), q));
     }
 
-    @PostMapping
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('OWNER')")
     RequestResponses.Item create(Authentication authentication, @RequestBody NewRequest body) {
-        return service.create(caller(authentication), body.text(), body.accountNumber());
+        return service.create(caller(authentication), body.text(), body.accountNumber(), List.of());
+    }
+
+    // the same with files: the parts "text", "account_number" and "files" of a multipart form
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('OWNER')")
+    RequestResponses.Item createWithFiles(
+            Authentication authentication,
+            @RequestParam(value = "text", required = false) String text,
+            @RequestParam(value = "account_number", required = false) String accountNumber,
+            @RequestPart(value = "files", required = false) List<MultipartFile> files) {
+        return service.create(caller(authentication), text, accountNumber, files);
     }
 
     @GetMapping("/{id}")
@@ -57,11 +80,37 @@ class RequestController {
         return service.messages(caller(authentication), id, after);
     }
 
-    @PostMapping("/{id}/messages")
+    @PostMapping(value = "/{id}/messages", consumes = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     RequestResponses.Message addMessage(Authentication authentication, @PathVariable long id, @RequestBody NewMessage body) {
-        return service.addMessage(caller(authentication), id, body.text());
+        return service.addMessage(caller(authentication), id, body.text(), List.of());
+    }
+
+    // the same with files: the parts "text" and "files" of a multipart form
+    @PostMapping(value = "/{id}/messages", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    RequestResponses.Message addMessageWithFiles(
+            Authentication authentication,
+            @PathVariable long id,
+            @RequestParam(value = "text", required = false) String text,
+            @RequestPart(value = "files", required = false) List<MultipartFile> files) {
+        return service.addMessage(caller(authentication), id, text, files);
+    }
+
+    // The file goes through the backend, so the rights of the request are checked; the storage has no public address.
+    @GetMapping("/{id}/attachments/{attachmentId}")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    ResponseEntity<InputStreamResource> download(Authentication authentication, @PathVariable long id, @PathVariable long attachmentId) {
+        RequestService.DownloadedAttachment file = service.download(caller(authentication), id, attachmentId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(file.contentType()))
+                .contentLength(file.size())
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(file.name(), StandardCharsets.UTF_8).build().toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .cacheControl(CacheControl.noStore().cachePrivate())
+                .body(new InputStreamResource(file.content()));
     }
 
     private static RequestService.Caller caller(Authentication authentication) {

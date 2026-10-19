@@ -2,6 +2,8 @@ import { ArrowLeftOutlined } from '@ant-design/icons'
 import { Alert, Button, Flex, Input, Spin, Typography } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Me } from '../auth/authApi'
+import AttachmentList from './AttachmentList'
+import AttachmentPicker from './AttachmentPicker'
 import { authorLabel, formatTime, ownerLabel } from './format'
 import { type ChatMessage, type RequestItem, type SendResult, fetchMessages, sendMessage } from './requestsApi'
 import { usePolling } from './usePolling'
@@ -22,6 +24,8 @@ interface Props {
 }
 
 const SEND_FAILURES: Record<Exclude<SendResult['status'], 'ok'>, string> = {
+  'too-large': 'Файл слишком большой или вложения превышают допустимый размер',
+  unsupported: 'Тип файла не поддерживается',
   'not-found': 'Заявка недоступна',
   forbidden: 'Недостаточно прав',
   invalid: 'Не удалось отправить сообщение. Попробуйте позже',
@@ -41,6 +45,7 @@ export default function ChatPanel({ request, user, narrow, onBack, onActivity }:
   const [messages, setMessages] = useState<Messages>({ kind: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const [text, setText] = useState('')
+  const [files, setFiles] = useState<File[]>([])
   const [sending, setSending] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
@@ -86,18 +91,19 @@ export default function ChatPanel({ request, user, narrow, onBack, onActivity }:
 
   const trimmed = text.trim()
   const tooLong = trimmed.length > MESSAGE_LIMIT
-  const canSend = trimmed.length > 0 && !tooLong && !sending
+  const canSend = (trimmed.length > 0 || files.length > 0) && !tooLong && !sending
 
   const send = async () => {
     if (!canSend) return
     setSending(true)
     setFailure(null)
-    const result = await sendMessage(request.id, trimmed)
+    const result = await sendMessage(request.id, trimmed, files)
     setSending(false)
     if (result.status === 'ok') {
       stickToEnd.current = true
       append([result.message])
       setText('')
+      setFiles([])
       onActivity()
     } else {
       setFailure(SEND_FAILURES[result.status])
@@ -152,6 +158,7 @@ export default function ChatPanel({ request, user, narrow, onBack, onActivity }:
                   }}
                 >
                   {message.text}
+                  <AttachmentList requestId={request.id} attachments={message.attachments ?? []} />
                 </div>
               </Flex>
             ))}
@@ -177,6 +184,7 @@ export default function ChatPanel({ request, user, narrow, onBack, onActivity }:
             }}
           />
           {tooLong && <Typography.Text type="danger">Сообщение длиннее {MESSAGE_LIMIT} символов</Typography.Text>}
+          <AttachmentPicker files={files} onChange={setFiles} disabled={sending} />
           <Flex justify="flex-end">
             <Button type="primary" disabled={!canSend} loading={sending} onClick={() => void send()}>
               Отправить

@@ -1,5 +1,6 @@
 import { Alert, Button, Collapse, Flex, Spin, Typography } from 'antd'
 import { useEffect, useState } from 'react'
+import { saveFile } from '../download'
 import { type Receipt, downloadReceipt, fetchReceipts } from './receiptsApi'
 import { formatMoney, formatReceiptMonth } from './receiptFormat'
 
@@ -16,18 +17,6 @@ function Amount({ label, amount }: { label: string; amount: number | null }) {
       <Typography.Text strong>{formatMoney(amount)}</Typography.Text>
     </Flex>
   )
-}
-
-// Hands the downloaded file to the browser as if a link to it had been followed.
-function saveFile(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
 }
 
 // The receipts of the account, newest first, as an accordion: a panel per month with the two amounts and the PDF link.

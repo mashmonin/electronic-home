@@ -1,0 +1,81 @@
+databaseChangeLog:
+  - changeSet:
+      id: 016-create-request-attachments
+      author: electronic-home
+      changes:
+        # a message may be only files: the text can be empty (the service requires a text or a file)
+        - sql:
+            sql: ALTER TABLE request_messages DROP CONSTRAINT ck_request_messages_body
+        - createTable:
+            tableName: request_attachments
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_request_attachments
+              - column:
+                  name: message_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_request_attachments_message
+                    references: request_messages(id)
+                    deleteCascade: true
+              # the key of the object in the bucket of the attachments (a UUID made by the server)
+              - column:
+                  name: object_key
+                  type: varchar(36)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_request_attachments_object_key
+              # the name for showing and for the download; it is never part of the key
+              - column:
+                  name: file_name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: content_type
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: size_bytes
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: sha256
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_test
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: ALTER TABLE request_attachments ADD CONSTRAINT ck_request_attachments_size CHECK (size_bytes > 0)
+        - sql:
+            sql: ALTER TABLE request_attachments ADD CONSTRAINT ck_request_attachments_name CHECK (length(btrim(file_name)) > 0)
+        - createIndex:
+            tableName: request_attachments
+            indexName: ix_request_attachments_message
+            columns:
+              - column: { name: message_id }
+      rollback:
+        - dropTable:
+            tableName: request_attachments
+        - sql:
+            sql: ALTER TABLE request_messages ADD CONSTRAINT ck_request_messages_body CHECK (length(btrim(body)) > 0)

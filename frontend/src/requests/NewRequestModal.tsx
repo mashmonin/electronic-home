@@ -1,5 +1,6 @@
 import { Alert, Button, Form, Input, Modal, Select } from 'antd'
 import { useState } from 'react'
+import AttachmentPicker from './AttachmentPicker'
 import { createRequest, type CreateResult, type RequestItem } from './requestsApi'
 
 const TEXT_LIMIT = 2000
@@ -21,12 +22,15 @@ const FAILURES: Record<Exclude<CreateResult['status'], 'ok'>, string> = {
   forbidden: 'Недостаточно прав',
   'no-account': 'К вашей учётной записи не привязан лицевой счёт',
   invalid: 'Проверьте сообщение',
+  'too-large': 'Файл слишком большой или вложения превышают допустимый размер',
+  unsupported: 'Тип файла не поддерживается',
   error: 'Не удалось создать заявку. Попробуйте позже',
 }
 
 // The window of a new request: the subject, the first message and, if the owner has several accounts, the apartment.
 export default function NewRequestModal({ open, accounts, onCancel, onCreated }: Props) {
   const [text, setText] = useState('')
+  const [files, setFiles] = useState<File[]>([])
   const [account, setAccount] = useState<string | null>(null)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [failure, setFailure] = useState<string | null>(null)
@@ -35,7 +39,7 @@ export default function NewRequestModal({ open, accounts, onCancel, onCreated }:
 
   const submit = async () => {
     const found: FieldErrors = {}
-    if (!text.trim()) found.text = 'Введите сообщение'
+    if (!text.trim() && files.length === 0) found.text = 'Введите сообщение'
     else if (text.trim().length > TEXT_LIMIT) found.text = `Сообщение длиннее ${TEXT_LIMIT} символов`
     if (chooseAccount && !account) found.account = 'Выберите квартиру'
     setErrors(found)
@@ -43,10 +47,11 @@ export default function NewRequestModal({ open, accounts, onCancel, onCreated }:
     if (Object.keys(found).length > 0) return
 
     setSending(true)
-    const result = await createRequest(text.trim(), chooseAccount ? (account ?? undefined) : undefined)
+    const result = await createRequest(text.trim(), files, chooseAccount ? (account ?? undefined) : undefined)
     setSending(false)
     if (result.status === 'ok') {
       setText('')
+      setFiles([])
       setAccount(null)
       onCreated(result.request)
     } else {
@@ -89,6 +94,7 @@ export default function NewRequestModal({ open, accounts, onCancel, onCreated }:
             onChange={(event) => setText(event.target.value)}
           />
         </Form.Item>
+        <AttachmentPicker files={files} onChange={setFiles} disabled={sending} />
       </Form>
     </Modal>
   )

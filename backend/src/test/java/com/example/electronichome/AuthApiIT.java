@@ -48,6 +48,12 @@ class AuthApiIT {
     @ServiceConnection
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16");
 
+    // the health includes the storage, and this test asks for the health
+    @org.springframework.test.context.DynamicPropertySource
+    static void storage(org.springframework.test.context.DynamicPropertyRegistry registry) {
+        SeaweedFsTestContainer.register(registry);
+    }
+
     @Value("${local.server.port}")
     int port;
 
