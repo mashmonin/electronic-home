@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 011-seed-test-admin
+      author: electronic-home
+      context: dev
+      changes:
+        # the password is in README.md; only its BCrypt hash is stored.
+        # A user with this login created by hand earlier is left as it is.
+        - sql:
+            sql: >
+              INSERT INTO users (login, password_hash, role, is_test)
+              SELECT 'admin', '$2a$10$HJfc.0RNYDhJVj4ha1lN6Oi0XGRy0I8sdv17uuJAmjylugX5ACNl.', 'ADMIN', TRUE
+              WHERE NOT EXISTS (SELECT 1 FROM users WHERE lower(login) = 'admin')
+      rollback:
+        - sql:
+            sql: DELETE FROM users WHERE login = 'admin' AND is_test

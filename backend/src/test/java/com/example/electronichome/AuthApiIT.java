@@ -185,6 +185,16 @@ class AuthApiIT {
     }
 
     @Test
+    void testAdministratorSignsInAndSeesAllAccounts() throws Exception {
+        int accounts = jdbc.queryForObject("SELECT count(*) FROM accounts", Integer.class);
+
+        JsonNode body = json.readTree(get("/api/auth/me", AuthSupport.bearer(port, "admin", "Admin-dev-123")).body());
+
+        assertThat(body.get("role").asString()).isEqualTo("ADMIN");
+        assertThat(body.get("accounts")).hasSize(accounts);
+    }
+
+    @Test
     void meNeedsAToken() throws Exception {
         HttpResponse<String> response = get("/api/auth/me", null);
 

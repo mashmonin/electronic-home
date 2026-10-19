@@ -62,14 +62,14 @@ class ReceiptService {
     }
 
     /**
-     * Publishes the receipt of the month: the file is stored first, then the record is saved. When the transaction
+     * Publishes the receipt of the month for an administrator or for a caller with the admin token: the file is stored first, then the record is saved. When the transaction
      * does not commit, the new file is deleted; when it does and an older file was replaced, the older one is deleted.
      */
     @Transactional
     Result publish(
-            String accountNumber, String month, String token, String capitalRepair, String utilities, InputStream content)
+            String accountNumber, String month, boolean admin, String token, String capitalRepair, String utilities, InputStream content)
             throws IOException {
-        checkToken(token);
+        checkAllowed(admin, token);
         LocalDate periodMonth = parsePublishableMonth(month);
         BigDecimal[] amounts = parseAmounts(capitalRepair, utilities);
         AccountEntity account = accounts.findByNumber(accountNumber)
@@ -134,7 +134,11 @@ class ReceiptService {
         return new Download(content, receipt.getSizeBytes());
     }
 
-    private void checkToken(String token) {
+    // A signed-in administrator may publish; anyone else needs the configured token.
+    private void checkAllowed(boolean admin, String token) {
+        if (admin) {
+            return;
+        }
         String expected = properties.adminToken();
         boolean ok = expected != null && !expected.isBlank() && token != null
                 && MessageDigest.isEqual(token.getBytes(StandardCharsets.UTF_8), expected.getBytes(StandardCharsets.UTF_8));

@@ -17,10 +17,11 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-// No admin token is configured (as in production before RECEIPTS_ADMIN_TOKEN is set): nobody can publish, reading works.
+// No admin token is configured (as in production before RECEIPTS_ADMIN_TOKEN is set): only a signed-in administrator
+// can publish, reading works.
 @Testcontainers
 @ActiveProfiles("dev")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "receipts.admin-token=")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {"receipts.admin-token=", "receipts.storage.path=${java.io.tmpdir}/publishing-disabled-it"})
 class ReceiptsPublishingDisabledIT {
 
     @Container
@@ -48,6 +49,27 @@ class ReceiptsPublishingDisabledIT {
         assertThat(put(null).statusCode()).isEqualTo(403);
         assertThat(put("").statusCode()).isEqualTo(403);
         assertThat(put("dev-admin-token").statusCode()).isEqualTo(403);
+    }
+
+    @Test
+    void anOwnerCannotPublishEitherButAnAdministratorCan() throws Exception {
+        AuthSupport.createUser(jdbc, "it-owner-pd", "OWNER", true, "000000000001");
+        try {
+            assertThat(putAs(AuthSupport.bearer(port, "it-owner-pd")).statusCode()).isEqualTo(403);
+            assertThat(putAs(AuthSupport.adminBearer(jdbc, port)).statusCode()).isEqualTo(201);
+        } finally {
+            AuthSupport.deleteUser(jdbc, "it-owner-pd");
+            jdbc.update("DELETE FROM receipts");
+        }
+    }
+
+    private HttpResponse<String> putAs(String bearer) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/accounts/000000000001/receipts/2026-09"))
+                .header("Content-Type", "application/pdf")
+                .header("Authorization", bearer)
+                .PUT(HttpRequest.BodyPublishers.ofString("%PDF-1.4\n%%EOF\n", StandardCharsets.UTF_8))
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     @Test

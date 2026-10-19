@@ -31,7 +31,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 // Who may do what: the roles, the links to accounts, and the order 401 -> 403 -> 404.
 @Testcontainers
 @ActiveProfiles("dev")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "receipts.admin-token=it-admin-token")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {"receipts.admin-token=it-admin-token", "receipts.storage.path=${java.io.tmpdir}/access-control-it"})
 class AccessControlIT {
 
     private static final String ACCOUNT = "000000000001";
@@ -88,6 +88,28 @@ class AccessControlIT {
     }
 
     private static final String READING = "{\"readings\":[{\"meter_number\":\"Тест 1\",\"value\":250.125}]}";
+
+    @Test
+    void theListOfAllAccountsIsForAdministratorsOnly() throws Exception {
+        assertThat(get("/api/accounts", null).statusCode()).isEqualTo(401);
+        assertThat(get("/api/accounts", owner).statusCode()).isEqualTo(403);
+        assertThat(get("/api/accounts", resident).statusCode()).isEqualTo(403);
+        assertThat(get("/api/accounts", owner).body()).doesNotContain("000000000001");
+
+        HttpResponse<String> response = get("/api/accounts", admin);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        tools.jackson.databind.JsonNode accounts = new tools.jackson.databind.json.JsonMapper().readTree(response.body()).get("accounts");
+        assertThat(accounts.size()).isEqualTo(jdbc.queryForObject("SELECT count(*) FROM accounts", Integer.class));
+        tools.jackson.databind.JsonNode first = accounts.get(0);
+        assertThat(first.get("number").asString()).isEqualTo("000000000001");
+        assertThat(first.get("address").asString()).isEqualTo("ул. Тестовая, д. Тест, кв. 1");
+        assertThat(first.get("apartment").asString()).isEqualTo("1");
+        assertThat(first.size()).isEqualTo(3);
+        java.util.List<String> numbers = new java.util.ArrayList<>();
+        accounts.forEach(account -> numbers.add(account.get("number").asString()));
+        assertThat(numbers).isSorted();
+    }
 
     @Test
     void ownerSeesOnlyTheirAccount() throws Exception {
@@ -163,15 +185,76 @@ class AccessControlIT {
         assertThat(response.body()).doesNotContain("ADMIN").doesNotContain("OWNER").doesNotContain("Exception");
     }
 
+    private HttpResponse<String> publish(String month, String bearer, String adminToken) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/accounts/" + ACCOUNT + "/receipts/" + month))
+                .header("Content-Type", "application/pdf")
+                .PUT(HttpRequest.BodyPublishers.ofString("%PDF-1.4\n%%EOF\n", StandardCharsets.UTF_8));
+        if (bearer != null) {
+            request.header("Authorization", bearer);
+        }
+        if (adminToken != null) {
+            request.header("X-Admin-Token", adminToken);
+        }
+        return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private int receiptRows() {
+        return jdbc.queryForObject("SELECT count(*) FROM receipts", Integer.class);
+    }
+
     @Test
     void receiptsArePublishedWithTheAdminTokenAndNoJwt() throws Exception {
-        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/accounts/" + ACCOUNT + "/receipts/2026-09"))
-                .header("Content-Type", "application/pdf")
-                .header("X-Admin-Token", "it-admin-token")
-                .PUT(HttpRequest.BodyPublishers.ofString("%PDF-1.4\n%%EOF\n", StandardCharsets.UTF_8));
+        assertThat(publish("2026-09", null, "it-admin-token").statusCode()).isEqualTo(201);
+        assertThat(receiptRows()).isEqualTo(1);
+    }
 
-        HttpResponse<String> response = HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+    @Test
+    void administratorPublishesWithTheLoginTokenAndNoAdminToken() throws Exception {
+        assertThat(publish("2026-09", admin, null).statusCode()).isEqualTo(201);
+        assertThat(publish("2026-09", admin, null).statusCode()).isEqualTo(200);
+        assertThat(receiptRows()).isEqualTo(1);
+    }
 
-        assertThat(response.statusCode()).isEqualTo(201);
+    @Test
+    void ownerAndResidentCannotPublishWithoutTheAdminToken() throws Exception {
+        assertThat(publish("2026-09", owner, null).statusCode()).isEqualTo(403);
+        assertThat(publish("2026-09", resident, null).statusCode()).isEqualTo(403);
+        assertThat(publish("2026-09", otherOwner, "wrong").statusCode()).isEqualTo(403);
+        assertThat(receiptRows()).isZero();
+    }
+
+    @Test
+    void ownerWithTheAdminTokenStillCanPublishAsAScript() throws Exception {
+        assertThat(publish("2026-09", owner, "it-admin-token").statusCode()).isEqualTo(201);
+    }
+
+    @Test
+    void anonymousCallerWithoutTheTokenIsForbidden() throws Exception {
+        assertThat(publish("2026-09", null, null).statusCode()).isEqualTo(403);
+        assertThat(receiptRows()).isZero();
+    }
+
+    @Test
+    void expiredLoginTokenIsUnauthorizedEvenWithTheRightAdminToken() throws Exception {
+        String id = jdbc.queryForObject("SELECT id FROM users WHERE login = 'it-admin-ac'", String.class);
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer("electronic-home").subject(id)
+                .issuedAt(now.minusSeconds(7200)).expiresAt(now.minusSeconds(3600))
+                .claim("roles", List.of("ADMIN")).build();
+        String expired = encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
+
+        assertThat(publish("2026-09", "Bearer " + expired, "it-admin-token").statusCode()).isEqualTo(401);
+        assertThat(receiptRows()).isZero();
+    }
+
+    @Test
+    void publishedReceiptCanBeDownloadedByTheOwner() throws Exception {
+        publish("2026-09", admin, null);
+
+        HttpResponse<String> response = get("/api/accounts/" + ACCOUNT + "/receipts/2026-09", owner);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).startsWith("%PDF-");
     }
 }

@@ -5,7 +5,8 @@ import type { Account } from './accountApi'
 import type { Tab } from './tabs'
 
 interface Props {
-  account: Account
+  /** The account of the screen; null for an administrator, who has none. */
+  account: Account | null
   user: Me
   activeTab: Tab
   onTabChange: (tab: Tab) => void
@@ -37,16 +38,18 @@ export default function AppHeader({ account, user, activeTab, onTabChange, onSig
         <Typography.Text strong>{user.login}</Typography.Text>
         <Typography.Text type="secondary">{ROLE_NAMES[user.role]}</Typography.Text>
       </Flex>
-      <Flex vertical gap={4}>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          Совладельцы счёта
-        </Typography.Text>
-      {account.owners.length === 0 ? (
-        <Typography.Text type="secondary">Совладельцы не указаны</Typography.Text>
-      ) : (
-        account.owners.map((owner) => <Typography.Text key={owner.full_name}>{owner.full_name}</Typography.Text>)
+      {account && (
+        <Flex vertical gap={4}>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            Совладельцы счёта
+          </Typography.Text>
+          {account.owners.length === 0 ? (
+            <Typography.Text type="secondary">Совладельцы не указаны</Typography.Text>
+          ) : (
+            account.owners.map((owner) => <Typography.Text key={owner.full_name}>{owner.full_name}</Typography.Text>)
+          )}
+        </Flex>
       )}
-      </Flex>
       <Button onClick={onSignOut} icon={<LogoutOutlined />}>
         Выйти
       </Button>
@@ -69,9 +72,15 @@ export default function AppHeader({ account, user, activeTab, onTabChange, onSig
             ТСЖ «Комфорт»
           </Typography.Text>
           <Flex gap={24}>
-            <NavItem label="Показания" active={activeTab === 'readings'} onClick={() => onTabChange('readings')} />
-            {user.role !== 'RESIDENT' && (
-              <NavItem label="Квитанции" active={activeTab === 'receipts'} onClick={() => onTabChange('receipts')} />
+            {user.role === 'ADMIN' ? (
+              <NavItem label="Выставить квитанции" active={activeTab === 'upload'} onClick={() => onTabChange('upload')} />
+            ) : (
+              <>
+                <NavItem label="Показания" active={activeTab === 'readings'} onClick={() => onTabChange('readings')} />
+                {user.role === 'OWNER' && (
+                  <NavItem label="Квитанции" active={activeTab === 'receipts'} onClick={() => onTabChange('receipts')} />
+                )}
+              </>
             )}
             <Typography.Text type="secondary">Заявки</Typography.Text>
           </Flex>
@@ -87,12 +96,14 @@ export default function AppHeader({ account, user, activeTab, onTabChange, onSig
             />
           </Popover>
           <HomeOutlined aria-label="Дом" style={ICON_STYLE} />
-          <Flex vertical align="flex-end">
-            <Typography.Text strong>{account.address}</Typography.Text>
-            <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-              Лицевой счёт № {account.number}
-            </Typography.Text>
-          </Flex>
+          {account && (
+            <Flex vertical align="flex-end">
+              <Typography.Text strong>{account.address}</Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                Лицевой счёт № {account.number}
+              </Typography.Text>
+            </Flex>
+          )}
         </Flex>
       </Flex>
     </Layout.Header>

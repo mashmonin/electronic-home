@@ -8,7 +8,8 @@ import ReceiptsTab from './ReceiptsTab'
 import { type Account, fetchAccount, resolveAccountNumber } from './accountApi'
 import PeriodCaption from './PeriodCaption'
 import { toMeters } from './meters'
-import { type Tab, tabFromSearch, writeTab } from './tabs'
+import UploadReceiptTab from './UploadReceiptTab'
+import { type Tab, allowedTab, tabFromSearch, writeTab } from './tabs'
 
 type State =
   | { kind: 'loading' }
@@ -25,7 +26,7 @@ interface Props {
   search?: string
 }
 
-export default function MeterReadingsPage({
+function AccountScreen({
   user,
   onSignOut = () => {},
   today = new Date(),
@@ -33,10 +34,10 @@ export default function MeterReadingsPage({
 }: Props) {
   const [state, setState] = useState<State>({ kind: 'loading' })
   const [requestedTab, setTab] = useState<Tab>(() => tabFromSearch(search))
-  // a resident has no receipts; the server refuses them too
-  const tab: Tab = user.role === 'RESIDENT' ? 'readings' : requestedTab
+  // the tabs a role may not open fall back to the readings; the server refuses them too
+  const tab: Tab = allowedTab(requestedTab, user.role)
   const wide = Grid.useBreakpoint().md ?? false
-  const accountNumber = resolveAccountNumber(search, user)
+  const accountNumber = resolveAccountNumber(user)
 
   useEffect(() => {
     if (!accountNumber) {
@@ -99,6 +100,8 @@ export default function MeterReadingsPage({
         <Flex vertical gap={24} style={{ maxWidth: 700, margin: '0 auto' }}>
           {tab === 'receipts' ? (
             <ReceiptsTab accountNumber={account.number} />
+          ) : tab === 'upload' ? (
+            <UploadReceiptTab />
           ) : (
             <>
               <PeriodCaption period={account.reading_period} meters={meters} />
@@ -116,5 +119,28 @@ export default function MeterReadingsPage({
         </Flex>
       </Layout.Content>
     </Layout>
+  )
+}
+
+// An administrator has no account of his own: the screen is the header and the upload tab, nothing is loaded.
+function AdminScreen({ user, onSignOut }: { user: Me; onSignOut: () => void }) {
+  const wide = Grid.useBreakpoint().md ?? false
+  return (
+    <Layout style={{ minHeight: '100vh' }}>
+      <AppHeader account={null} user={user} activeTab="upload" onTabChange={() => {}} onSignOut={onSignOut} />
+      <Layout.Content style={{ padding: wide ? '38px 40px' : '24px 16px' }}>
+        <Flex vertical gap={24} style={{ maxWidth: 700, margin: '0 auto' }}>
+          <UploadReceiptTab />
+        </Flex>
+      </Layout.Content>
+    </Layout>
+  )
+}
+
+export default function MeterReadingsPage(props: Props) {
+  return props.user.role === 'ADMIN' ? (
+    <AdminScreen user={props.user} onSignOut={props.onSignOut ?? (() => {})} />
+  ) : (
+    <AccountScreen {...props} />
   )
 }

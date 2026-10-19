@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MeterReadingsPage from './MeterReadingsPage'
 import type { Account } from './accountApi'
 import type { Receipt } from './receiptsApi'
-import { ADMIN } from '../testUsers'
+import { ADMIN, OWNER, RESIDENT } from '../testUsers'
 
 const ACCOUNT: Account = {
   number: '000000000001',
@@ -65,7 +65,7 @@ const nav = (name: string) => screen.getByRole('button', { name })
 const isActive = (name: string) => nav(name).getAttribute('aria-current') === 'page'
 
 async function openPage(search?: string) {
-  render(<MeterReadingsPage user={ADMIN} today={new Date(2026, 9, 18)} {...(search === undefined ? {} : { search })} />)
+  render(<MeterReadingsPage user={OWNER} today={new Date(2026, 9, 18)} {...(search === undefined ? {} : { search })} />)
   await screen.findByText('Лицевой счёт № 000000000001')
 }
 
@@ -156,6 +156,31 @@ describe('tabs', () => {
     expect((await screen.findAllByRole('button', { name: 'Скачать PDF' })).length).toBeGreaterThan(0)
   })
 
+  it('gives an administrator the one tab "Выставить квитанции" and no readings or receipts', async () => {
+    window.history.replaceState(null, '', '/?tab=receipts')
+    const server = fakeServer()
+    render(<MeterReadingsPage user={ADMIN} today={new Date(2026, 9, 18)} />)
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Выставить квитанции' })).toBeInTheDocument()
+    expect(isActive('Выставить квитанции')).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Показания' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Квитанции' })).not.toBeInTheDocument()
+    expect(server.receiptCalls).toBe(0)
+  })
+
+  it.each([
+    ['owner', OWNER],
+    ['resident', RESIDENT],
+  ])('has no upload tab for the %s', async (_name, user) => {
+    window.history.replaceState(null, '', '/?tab=upload')
+    fakeServer()
+    render(<MeterReadingsPage user={user} today={new Date(2026, 9, 18)} />)
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Показания за октябрь' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Выставить квитанции' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Опубликовать квитанцию')).not.toBeInTheDocument()
+  })
+
   it('does nothing when "Заявки" is clicked', async () => {
     fakeServer()
     await openPage()
@@ -181,7 +206,7 @@ describe('tabs', () => {
   it('does not ask for the receipts when the account is not found', async () => {
     window.history.replaceState(null, '', '/?account=999&tab=receipts')
     const server = fakeServer({ accountStatus: 404 })
-    render(<MeterReadingsPage user={ADMIN} today={new Date(2026, 9, 18)} />)
+    render(<MeterReadingsPage user={OWNER} today={new Date(2026, 9, 18)} />)
 
     expect(await screen.findByText('Лицевой счёт не найден')).toBeInTheDocument()
     expect(server.receiptCalls).toBe(0)

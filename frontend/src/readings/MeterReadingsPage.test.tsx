@@ -44,7 +44,7 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 async function renderPage(search = '?account=000000000001', today = new Date(2026, 7, 10)) {
-  render(<MeterReadingsPage user={ADMIN} today={today} search={search} />)
+  render(<MeterReadingsPage user={OWNER} today={today} search={search} />)
   await screen.findByRole('heading', { level: 1 })
 }
 
@@ -240,7 +240,7 @@ describe('reading period', () => {
 
   async function renderAccount(account: Account) {
     mockAccount(account)
-    render(<MeterReadingsPage user={ADMIN} today={new Date(2026, 9, 18)} search="?account=000000000001" />)
+    render(<MeterReadingsPage user={OWNER} today={new Date(2026, 9, 18)} search="?account=000000000001" />)
     await screen.findByRole('heading', { level: 1 })
   }
 
@@ -337,7 +337,7 @@ describe('reading period', () => {
 
   it('does not decide anything by the date of the device', async () => {
     mockAccount(ACCOUNT)
-    render(<MeterReadingsPage user={ADMIN} today={new Date(2030, 0, 1)} search="?account=000000000001" />)
+    render(<MeterReadingsPage user={OWNER} today={new Date(2030, 0, 1)} search="?account=000000000001" />)
     await screen.findByRole('heading', { level: 1 })
 
     expect(screen.getByText('Показания за октябрь')).toBeInTheDocument()
@@ -348,7 +348,7 @@ describe('reading period', () => {
 describe('verification date', () => {
   async function renderOn(today: Date, account: Account = ACCOUNT) {
     mockAccount(account)
-    render(<MeterReadingsPage user={ADMIN} today={today} search="?account=000000000001" />)
+    render(<MeterReadingsPage user={OWNER} today={today} search="?account=000000000001" />)
     await screen.findByRole('heading', { level: 1 })
   }
 
@@ -403,9 +403,10 @@ describe('verification date', () => {
 })
 
 describe('MeterReadingsPage account loading', () => {
-  it('requests the account given in the address bar', async () => {
+  it('requests the account of the user', async () => {
     const fetchMock = mockAccount({ ...ACCOUNT, number: '000000000002' })
-    await renderPage('?account=000000000002')
+    render(<MeterReadingsPage user={{ ...OWNER, accounts: ['000000000002'] }} search="" />)
+    await screen.findByRole('heading', { level: 1 })
     expect(fetchMock).toHaveBeenCalledWith('/api/accounts/000000000002', expect.anything())
     expect(screen.getByText('Лицевой счёт № 000000000002')).toBeInTheDocument()
   })
@@ -434,28 +435,28 @@ describe('MeterReadingsPage account loading', () => {
 
   it('shows a spinner and no content while loading', () => {
     vi.spyOn(globalThis, 'fetch').mockReturnValue(new Promise(() => {}))
-    const { container } = render(<MeterReadingsPage user={ADMIN} search="?account=000000000001" />)
+    const { container } = render(<MeterReadingsPage user={OWNER} search="?account=000000000001" />)
     expect(container.querySelector('.ant-spin')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
   })
 
   it('shows a message when the account is not found', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 404 }))
-    render(<MeterReadingsPage user={ADMIN} search="?account=999" />)
+    render(<MeterReadingsPage user={OWNER} search="?account=999" />)
     expect(await screen.findByText('Лицевой счёт не найден')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
   })
 
   it('shows a message on a network error', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network'))
-    render(<MeterReadingsPage user={ADMIN} search="?account=000000000001" />)
+    render(<MeterReadingsPage user={OWNER} search="?account=000000000001" />)
     expect(await screen.findByText('Не удалось загрузить данные')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument()
   })
 
   it('shows a message on a server error', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 500 }))
-    render(<MeterReadingsPage user={ADMIN} search="?account=000000000001" />)
+    render(<MeterReadingsPage user={OWNER} search="?account=000000000001" />)
     expect(await screen.findByText('Не удалось загрузить данные')).toBeInTheDocument()
   })
 
@@ -484,5 +485,46 @@ describe('validateReading', () => {
 
   it('rejects values below the previous reading', () => {
     expect(validateReading('245.299', 245.3)).toBe('Показание не может быть меньше предыдущего')
+  })
+})
+
+describe('the screen of an administrator', () => {
+  function renderAdmin(search = '') {
+    const fetchMock = mockAccount()
+    render(<MeterReadingsPage user={ADMIN} search={search} />)
+    return fetchMock
+  }
+
+  it('has the header and the upload tab, and no data of an account', async () => {
+    const fetchMock = renderAdmin('?account=000000000001')
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Выставить квитанции' })).toBeInTheDocument()
+    expect(screen.getByText('ТСЖ «Комфорт»')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Выставить квитанции' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByText('Заявки')).toBeInTheDocument()
+    expect(screen.queryByText(/Лицевой счёт №/)).not.toBeInTheDocument()
+    expect(screen.queryByText('ул. Тестовая, д. Тест, кв. 1')).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => /^\/api\/accounts\/\d/.test(String(url)))).toBe(false)
+  })
+
+  it('has neither the readings nor the receipts, even when the address asks for them', async () => {
+    renderAdmin('?tab=receipts')
+
+    await screen.findByRole('heading', { level: 1, name: 'Выставить квитанции' })
+    expect(screen.queryByRole('button', { name: 'Показания' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Квитанции' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Квитанции пока не опубликованы')).not.toBeInTheDocument()
+  })
+
+  it('shows the login and the role in the profile menu, without co-owners', async () => {
+    renderAdmin()
+    await screen.findByRole('heading', { level: 1, name: 'Выставить квитанции' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Профиль' }))
+
+    expect(await screen.findByText('Администратор')).toBeInTheDocument()
+    expect(screen.getByText('admin')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Выйти/ })).toBeInTheDocument()
+    expect(screen.queryByText('Совладельцы счёта')).not.toBeInTheDocument()
   })
 })

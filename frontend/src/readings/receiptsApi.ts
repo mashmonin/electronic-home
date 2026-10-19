@@ -39,3 +39,41 @@ export async function downloadReceipt(accountNumber: string, month: string): Pro
     return { status: 'error' }
   }
 }
+
+export interface Amounts {
+  capitalRepair: number
+  utilities: number
+}
+
+export type PublishResult =
+  | { status: 'created' | 'replaced' }
+  | { status: 'invalid' | 'too-large' | 'not-found' | 'forbidden' | 'error' }
+
+// Publishes (or replaces) the receipt of the month; the file is the whole body, the amounts are optional parameters.
+// Never throws; a 401 ends the session inside `apiFetch`.
+export async function publishReceipt(
+  accountNumber: string,
+  month: string,
+  file: File,
+  amounts: Amounts | null,
+): Promise<PublishResult> {
+  const query = amounts
+    ? `?capital_repair=${amounts.capitalRepair.toFixed(2)}&utilities=${amounts.utilities.toFixed(2)}`
+    : ''
+  try {
+    const response = await apiFetch(`/api/accounts/${encodeURIComponent(accountNumber)}/receipts/${month}${query}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/pdf' },
+      body: file,
+    })
+    if (response.status === 201) return { status: 'created' }
+    if (response.status === 200) return { status: 'replaced' }
+    if (response.status === 400) return { status: 'invalid' }
+    if (response.status === 413) return { status: 'too-large' }
+    if (response.status === 404) return { status: 'not-found' }
+    if (response.status === 403) return { status: 'forbidden' }
+    return { status: 'error' }
+  } catch {
+    return { status: 'error' }
+  }
+}

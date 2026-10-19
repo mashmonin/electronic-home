@@ -71,9 +71,20 @@ class UserSchemaIT {
         assertThat(user.get("enabled")).isEqualTo(true);
         assertThat(user.get("is_test")).isEqualTo(true);
         assertThat((String) user.get("password_hash")).startsWith("$2").doesNotContain("Owner-dev-123");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM users", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM users", Integer.class)).isEqualTo(2);
         assertThat(jdbc.queryForObject("""
                 SELECT a.number FROM user_accounts ua JOIN users u ON u.id = ua.user_id
                 JOIN accounts a ON a.id = ua.account_id WHERE u.login = 'owner'""", String.class)).isEqualTo("000000000001");
+    }
+
+    @Test
+    void testAdministratorHasARoleAndNoLinkedAccounts() {
+        var admin = jdbc.queryForMap("SELECT password_hash, role, enabled, is_test FROM users WHERE login = 'admin'");
+
+        assertThat(admin.get("role")).isEqualTo("ADMIN");
+        assertThat(admin.get("is_test")).isEqualTo(true);
+        assertThat((String) admin.get("password_hash")).startsWith("$2").doesNotContain("Admin-dev-123");
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM user_accounts ua JOIN users u ON u.id = ua.user_id WHERE u.login = 'admin'""", Integer.class)).isZero();
     }
 }

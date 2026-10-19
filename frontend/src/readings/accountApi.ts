@@ -58,8 +58,31 @@ export async function fetchAccount(number: string): Promise<AccountLoadResult> {
   }
 }
 
-// The account is the first one of the user; an administrator may pick another with `?account=`.
-export function resolveAccountNumber(search: string, user: Me): string | undefined {
-  const fromUrl = user.role === 'ADMIN' ? new URLSearchParams(search).get('account')?.trim() : undefined
-  return fromUrl || user.accounts[0]
+// The account of the screen is the first one of the user; `?account=` is not used.
+export function resolveAccountNumber(user: Me): string | undefined {
+  return user.accounts[0]
+}
+
+export interface AccountListItem {
+  number: string
+  address: string
+  apartment: string
+}
+
+export type AccountListResult =
+  | { status: 'ok'; accounts: AccountListItem[] }
+  | { status: 'forbidden' }
+  | { status: 'error' }
+
+// Every personal account with its address, for an administrator; never throws.
+export async function fetchAccounts(): Promise<AccountListResult> {
+  try {
+    const response = await apiFetch('/api/accounts')
+    if (response.status === 403) return { status: 'forbidden' }
+    if (!response.ok) return { status: 'error' }
+    const body = (await response.json()) as { accounts?: AccountListItem[] }
+    return { status: 'ok', accounts: body.accounts ?? [] }
+  } catch {
+    return { status: 'error' }
+  }
 }

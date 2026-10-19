@@ -12,6 +12,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -43,9 +45,13 @@ class ReceiptController {
             @RequestHeader(value = "X-Admin-Token", required = false) String token,
             @RequestParam(value = "capital_repair", required = false) String capitalRepair,
             @RequestParam(value = "utilities", required = false) String utilities,
+            Authentication authentication,
             HttpServletRequest request) throws IOException {
+        // The route is open to the callers with the admin token, so there may be no signed-in user at all.
+        boolean admin = authentication != null
+                && AuthorityUtils.authorityListToSet(authentication.getAuthorities()).contains("ROLE_ADMIN");
         ReceiptService.Result result =
-                service.publish(number, month, token, capitalRepair, utilities, request.getInputStream());
+                service.publish(number, month, admin, token, capitalRepair, utilities, request.getInputStream());
         return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK).body(result.body());
     }
 

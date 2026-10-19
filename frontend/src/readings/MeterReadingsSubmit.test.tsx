@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import MeterReadingsPage from './MeterReadingsPage'
 import type { Account, AccountMeter } from './accountApi'
-import { ADMIN } from '../testUsers'
+import { OWNER } from '../testUsers'
 
 function meter(number: string, type: 'HOT' | 'COLD', ...values: number[]): AccountMeter {
   return {
@@ -85,7 +85,7 @@ function errorsResponse(status: number, errors: { meter_number: string | null; c
 afterEach(() => vi.restoreAllMocks())
 
 async function renderPage() {
-  render(<MeterReadingsPage user={ADMIN} today={new Date(2026, 9, 18)} search="?account=000000000001" />)
+  render(<MeterReadingsPage user={OWNER} today={new Date(2026, 9, 18)} search="?account=000000000001" />)
   await screen.findByRole('heading', { level: 1 })
 }
 
@@ -140,7 +140,7 @@ describe('submitting readings', () => {
 
   it('does not show the full-screen spinner while the data is being refreshed', async () => {
     const server = fakeServer(saved)
-    const { container } = render(<MeterReadingsPage user={ADMIN} search="?account=000000000001" />)
+    const { container } = render(<MeterReadingsPage user={OWNER} search="?account=000000000001" />)
     await screen.findByRole('heading', { level: 1 })
     type(hot(), '250')
     send()

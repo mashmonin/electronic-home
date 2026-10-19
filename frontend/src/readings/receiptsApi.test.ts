@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clearToken, setToken } from '../auth/session'
-import { downloadReceipt, fetchReceipts } from './receiptsApi'
+import { downloadReceipt, fetchReceipts, publishReceipt } from './receiptsApi'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -77,5 +77,49 @@ describe('downloadReceipt', () => {
     expect(await downloadReceipt('1', '2026-10')).toEqual({ status: 'error' })
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network'))
     expect(await downloadReceipt('1', '2026-10')).toEqual({ status: 'error' })
+  })
+})
+
+describe('publishReceipt', () => {
+  const file = new File(['%PDF-1.4'], 'r.pdf', { type: 'application/pdf' })
+  const call = (status: number) => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status }))
+    return fetchMock
+  }
+
+  it('puts the file as the body with the PDF type, the token and no amounts', async () => {
+    setToken('abc')
+    const fetchMock = call(201)
+
+    expect(await publishReceipt('000000000001', '2026-10', file, null)).toEqual({ status: 'created' })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/accounts/000000000001/receipts/2026-10')
+    expect(init?.method).toBe('PUT')
+    expect(init?.body).toBe(file)
+    const headers = new Headers(init?.headers)
+    expect(headers.get('Content-Type')).toBe('application/pdf')
+    expect(headers.get('Authorization')).toBe('Bearer abc')
+  })
+
+  it('sends the amounts with a dot and two digits', async () => {
+    const fetchMock = call(200)
+
+    expect(await publishReceipt('1', '2026-10', file, { capitalRepair: 1842.5, utilities: 6318.27 })).toEqual({ status: 'replaced' })
+
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/accounts/1/receipts/2026-10?capital_repair=1842.50&utilities=6318.27')
+  })
+
+  it('names the answers of the server', async () => {
+    const expected: [number, string][] = [[400, 'invalid'], [413, 'too-large'], [404, 'not-found'], [403, 'forbidden'], [500, 'error']]
+    for (const [status, name] of expected) {
+      call(status)
+      expect(await publishReceipt('1', '2026-10', file, null)).toEqual({ status: name })
+    }
+  })
+
+  it('reports a network failure', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network'))
+    expect(await publishReceipt('1', '2026-10', file, null)).toEqual({ status: 'error' })
   })
 })

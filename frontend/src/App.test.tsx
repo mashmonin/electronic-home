@@ -218,14 +218,51 @@ describe('roles', () => {
     expect(screen.getByRole('button', { name: 'Квитанции' })).toBeInTheDocument()
   })
 
-  it('lets an administrator pick the account with ?account=', async () => {
-    window.history.replaceState(null, '', '/?account=000000000002')
-    server('ADMIN')
+  const emptyReceipts: Handler = (url) => (url.endsWith('/receipts') ? new Response(JSON.stringify({ receipts: [] })) : undefined)
+  const apartments: Handler = (url) =>
+    url === '/api/accounts'
+      ? new Response(JSON.stringify({ accounts: [{ number: '000000000001', address: 'ул. Тестовая, д. Тест, кв. 1', apartment: '1' }] }))
+      : undefined
+  const handlers: Handler = (url, init) => emptyReceipts(url, init) ?? apartments(url, init)
+
+  it('opens the upload tab for an administrator at once, with no readings, no receipts and no account', async () => {
+    window.history.replaceState(null, '', '/?tab=receipts&account=000000000001')
+    const fetchMock = server('ADMIN', handlers)
     render(<App />)
 
     await signIn()
 
-    expect(await screen.findByText('Лицевой счёт № 000000000002')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Выставить квитанции' })).toBeInTheDocument()
+    expect(screen.getByText('Опубликовать квитанцию')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Показания' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Квитанции' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Лицевой счёт №/)).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => /^\/api\/accounts\/\d/.test(String(url)))).toBe(false)
+  })
+
+  it('shows the upload tab again after a reload of the tab', async () => {
+    setToken('token-1')
+    server('ADMIN', handlers)
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Выставить квитанции' })).toBeInTheDocument()
+  })
+
+  it('does not give the upload tab to an owner or a resident, even by the address', async () => {
+    for (const role of ['OWNER', 'RESIDENT'] as const) {
+      window.history.replaceState(null, '', '/?tab=upload')
+      const fetchMock = server(role, handlers)
+      const { unmount } = render(<App />)
+      await signIn()
+
+      await screen.findByText('Лицевой счёт № 000000000001')
+      expect(screen.queryByRole('button', { name: 'Выставить квитанции' })).not.toBeInTheDocument()
+      expect(screen.queryByText('Опубликовать квитанцию')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Показания' })).toBeInTheDocument()
+      expect(fetchMock.mock.calls.some(([url]) => String(url) === '/api/accounts')).toBe(false)
+      unmount()
+      clearToken()
+    }
   })
 
   it('ignores ?account= for an owner', async () => {
