@@ -203,6 +203,7 @@ describe('roles', () => {
 
     await screen.findByText('Лицевой счёт № 000000000001')
     expect(screen.queryByRole('button', { name: 'Квитанции' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Заявки' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Показания' })).toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/receipts'))).toBe(false)
   })
@@ -216,6 +217,7 @@ describe('roles', () => {
     await screen.findByText('Лицевой счёт № 000000000001')
     expect(screen.getByRole('button', { name: 'Показания' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Квитанции' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Заявки' })).toBeInTheDocument()
   })
 
   const emptyReceipts: Handler = (url) => (url.endsWith('/receipts') ? new Response(JSON.stringify({ receipts: [] })) : undefined)
@@ -238,6 +240,17 @@ describe('roles', () => {
     expect(screen.queryByRole('button', { name: 'Квитанции' })).not.toBeInTheDocument()
     expect(screen.queryByText(/Лицевой счёт №/)).not.toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([url]) => /^\/api\/accounts\/\d/.test(String(url)))).toBe(false)
+  })
+
+  it('opens the requests of an administrator by the address, and the upload tab otherwise', async () => {
+    window.history.replaceState(null, '', '/?tab=requests')
+    server('ADMIN', (url) => (url === '/api/requests' ? new Response(JSON.stringify({ requests: [] })) : undefined))
+    render(<App />)
+
+    await signIn()
+
+    expect(await screen.findByText('Заявок пока нет')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Заявки' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('shows the upload tab again after a reload of the tab', async () => {

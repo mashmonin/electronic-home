@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { allowedTab, tabFromSearch, writeTab } from './tabs'
+import { allowedTab, requestFromSearch, tabFromSearch, writeRequest, writeTab } from './tabs'
 
 afterEach(() => window.history.replaceState(null, '', '/'))
 
@@ -7,6 +7,11 @@ describe('tabFromSearch', () => {
   it('opens the receipts only for tab=receipts', () => {
     expect(tabFromSearch('?tab=receipts')).toBe('receipts')
     expect(tabFromSearch('?account=000000000001&tab=receipts')).toBe('receipts')
+  })
+
+  it('opens the requests for tab=requests', () => {
+    expect(tabFromSearch('?tab=requests')).toBe('requests')
+    expect(tabFromSearch('?tab=requests&request=3')).toBe('requests')
   })
 
   it('does not take the upload from the address: an administrator has only that tab', () => {
@@ -23,10 +28,16 @@ describe('tabFromSearch', () => {
 })
 
 describe('allowedTab', () => {
-  it('leaves an administrator the upload only, whatever is asked', () => {
+  it('leaves an administrator the upload and the requests only', () => {
     expect(allowedTab('readings', 'ADMIN')).toBe('upload')
     expect(allowedTab('receipts', 'ADMIN')).toBe('upload')
     expect(allowedTab('upload', 'ADMIN')).toBe('upload')
+    expect(allowedTab('requests', 'ADMIN')).toBe('requests')
+  })
+
+  it('lets an owner open the requests and a resident not', () => {
+    expect(allowedTab('requests', 'OWNER')).toBe('requests')
+    expect(allowedTab('requests', 'RESIDENT')).toBe('readings')
   })
 
   it('lets an owner open the readings and the receipts, but not the upload', () => {
@@ -84,5 +95,36 @@ describe('writeTab', () => {
     writeTab('readings')
 
     expect(window.history.length).toBe(before)
+  })
+})
+
+describe('the selected request', () => {
+  it('is read from the address when it is a number', () => {
+    expect(requestFromSearch('?tab=requests&request=12')).toBe(12)
+    expect(requestFromSearch('')).toBeNull()
+    expect(requestFromSearch('?request=abc')).toBeNull()
+    expect(requestFromSearch('?request=')).toBeNull()
+    expect(requestFromSearch('?request=-1')).toBeNull()
+    expect(requestFromSearch('?request=1e3')).toBeNull()
+  })
+
+  it('is written into the address and removed from it, without history entries', () => {
+    window.history.replaceState(null, '', '/?tab=requests')
+    const before = window.history.length
+
+    writeRequest(7)
+    expect(window.location.search).toBe('?tab=requests&request=7')
+    writeRequest(null)
+    expect(window.location.search).toBe('?tab=requests')
+    expect(window.history.length).toBe(before)
+  })
+
+  it('goes away when another tab is written, and stays when the requests are written', () => {
+    window.history.replaceState(null, '', '/?account=000000000001&tab=requests&request=7')
+
+    writeTab('requests')
+    expect(window.location.search).toBe('?account=000000000001&tab=requests&request=7')
+    writeTab('receipts')
+    expect(window.location.search).toBe('?account=000000000001&tab=receipts')
   })
 })

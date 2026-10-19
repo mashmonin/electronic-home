@@ -1,0 +1,25 @@
+databaseChangeLog:
+  - changeSet:
+      id: 015-drop-request-status
+      author: electronic-home
+      changes:
+        # requests are not closed or opened any more: whether one waits for an answer follows from its last message
+        - dropIndex:
+            tableName: requests
+            indexName: ix_requests_status_last_message
+        - sql:
+            sql: ALTER TABLE requests DROP CONSTRAINT ck_requests_status
+        - dropColumn:
+            tableName: requests
+            columnName: status
+      rollback:
+        - sql:
+            sql: ALTER TABLE requests ADD COLUMN status varchar(8) NOT NULL DEFAULT 'OPEN'
+        - sql:
+            sql: ALTER TABLE requests ADD CONSTRAINT ck_requests_status CHECK (status IN ('OPEN', 'CLOSED'))
+        - createIndex:
+            tableName: requests
+            indexName: ix_requests_status_last_message
+            columns:
+              - column: { name: status }
+              - column: { name: last_message_at, descending: true }

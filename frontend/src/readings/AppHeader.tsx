@@ -73,16 +73,21 @@ export default function AppHeader({ account, user, activeTab, onTabChange, onSig
           </Typography.Text>
           <Flex gap={24}>
             {user.role === 'ADMIN' ? (
-              <NavItem label="Выставить квитанции" active={activeTab === 'upload'} onClick={() => onTabChange('upload')} />
+              <>
+                <NavItem label="Выставить квитанции" active={activeTab === 'upload'} onClick={() => onTabChange('upload')} />
+                <NavItem label="Заявки" active={activeTab === 'requests'} onClick={() => onTabChange('requests')} />
+              </>
             ) : (
               <>
                 <NavItem label="Показания" active={activeTab === 'readings'} onClick={() => onTabChange('readings')} />
                 {user.role === 'OWNER' && (
-                  <NavItem label="Квитанции" active={activeTab === 'receipts'} onClick={() => onTabChange('receipts')} />
+                  <>
+                    <NavItem label="Квитанции" active={activeTab === 'receipts'} onClick={() => onTabChange('receipts')} />
+                    <NavItem label="Заявки" active={activeTab === 'requests'} onClick={() => onTabChange('requests')} />
+                  </>
                 )}
               </>
             )}
-            <Typography.Text type="secondary">Заявки</Typography.Text>
           </Flex>
         </Flex>
         <Flex align="center" gap={18}>

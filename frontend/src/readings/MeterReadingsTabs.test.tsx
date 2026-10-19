@@ -181,14 +181,54 @@ describe('tabs', () => {
     expect(screen.queryByText('Опубликовать квитанцию')).not.toBeInTheDocument()
   })
 
-  it('does nothing when "Заявки" is clicked', async () => {
+  it('opens the requests when "Заявки" is clicked, and goes back to the readings', async () => {
+    fakeServer()
+    await openPage()
+    expect(isActive('Заявки')).toBe(false)
+
+    fireEvent.click(nav('Заявки'))
+
+    expect(await screen.findByRole('button', { name: 'Новая заявка' })).toBeInTheDocument()
+    expect(isActive('Заявки')).toBe(true)
+    expect(isActive('Показания')).toBe(false)
+    expect(window.location.search).toBe('?account=000000000001&tab=requests')
+
+    fireEvent.click(nav('Показания'))
+    expect(window.location.search).toBe('?account=000000000001')
+  })
+
+  it('opens the requests of an owner by the address', async () => {
+    window.history.replaceState(null, '', '/?account=000000000001&tab=requests')
     fakeServer()
     await openPage()
 
-    fireEvent.click(screen.getByText('Заявки'))
+    expect(await screen.findByRole('button', { name: 'Новая заявка' })).toBeInTheDocument()
+    expect(isActive('Заявки')).toBe(true)
+  })
 
-    expect(isActive('Показания')).toBe(true)
-    expect(window.location.search).toBe('?account=000000000001')
+  it('gives an administrator the tab "Заявки" without the button of a new request', async () => {
+    fakeServer()
+    render(<MeterReadingsPage user={ADMIN} today={new Date(2026, 9, 18)} />)
+    await screen.findByRole('heading', { level: 1, name: 'Выставить квитанции' })
+
+    fireEvent.click(nav('Заявки'))
+
+    expect(await screen.findByText('Заявок пока нет')).toBeInTheDocument()
+    expect(isActive('Заявки')).toBe(true)
+    expect(window.location.search).toContain('tab=requests')
+    expect(screen.queryByRole('button', { name: 'Новая заявка' })).not.toBeInTheDocument()
+
+    fireEvent.click(nav('Выставить квитанции'))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Выставить квитанции' })).toBeInTheDocument()
+    expect(window.location.search).not.toContain('tab=')
+  })
+
+  it('has no tab "Заявки" for a resident, and the address with tab=requests opens the readings', async () => {
+    window.history.replaceState(null, '', '/?account=000000000001&tab=requests')
+    fakeServer()
+    render(<MeterReadingsPage user={RESIDENT} today={new Date(2026, 9, 18)} />)
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Показания за октябрь' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Заявки' })).not.toBeInTheDocument()
   })
 

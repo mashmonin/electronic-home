@@ -8,6 +8,7 @@ import ReceiptsTab from './ReceiptsTab'
 import { type Account, fetchAccount, resolveAccountNumber } from './accountApi'
 import PeriodCaption from './PeriodCaption'
 import { toMeters } from './meters'
+import RequestsTab from '../requests/RequestsTab'
 import UploadReceiptTab from './UploadReceiptTab'
 import { type Tab, allowedTab, tabFromSearch, writeTab } from './tabs'
 
@@ -97,8 +98,10 @@ function AccountScreen({
     <Layout style={{ minHeight: '100vh' }}>
       <AppHeader account={account} user={user} activeTab={tab} onTabChange={changeTab} onSignOut={onSignOut} />
       <Layout.Content style={{ padding: wide ? '38px 40px' : '24px 16px' }}>
-        <Flex vertical gap={24} style={{ maxWidth: 700, margin: '0 auto' }}>
-          {tab === 'receipts' ? (
+        <Flex vertical gap={24} style={{ maxWidth: tab === 'requests' ? 1100 : 700, margin: '0 auto' }}>
+          {tab === 'requests' ? (
+            <RequestsTab user={user} />
+          ) : tab === 'receipts' ? (
             <ReceiptsTab accountNumber={account.number} />
           ) : tab === 'upload' ? (
             <UploadReceiptTab />
@@ -123,14 +126,20 @@ function AccountScreen({
 }
 
 // An administrator has no account of his own: the screen is the header and the upload tab, nothing is loaded.
-function AdminScreen({ user, onSignOut }: { user: Me; onSignOut: () => void }) {
+function AdminScreen({ user, onSignOut, search }: { user: Me; onSignOut: () => void; search: string }) {
   const wide = Grid.useBreakpoint().md ?? false
+  const [requestedTab, setTab] = useState<Tab>(() => tabFromSearch(search))
+  const tab: Tab = allowedTab(requestedTab, user.role)
+  const changeTab = (next: Tab) => {
+    writeTab(next)
+    setTab(next)
+  }
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <AppHeader account={null} user={user} activeTab="upload" onTabChange={() => {}} onSignOut={onSignOut} />
+      <AppHeader account={null} user={user} activeTab={tab} onTabChange={changeTab} onSignOut={onSignOut} />
       <Layout.Content style={{ padding: wide ? '38px 40px' : '24px 16px' }}>
-        <Flex vertical gap={24} style={{ maxWidth: 700, margin: '0 auto' }}>
-          <UploadReceiptTab />
+        <Flex vertical gap={24} style={{ maxWidth: tab === 'requests' ? 1100 : 700, margin: '0 auto' }}>
+          {tab === 'requests' ? <RequestsTab user={user} search={search} /> : <UploadReceiptTab />}
         </Flex>
       </Layout.Content>
     </Layout>
@@ -139,7 +148,7 @@ function AdminScreen({ user, onSignOut }: { user: Me; onSignOut: () => void }) {
 
 export default function MeterReadingsPage(props: Props) {
   return props.user.role === 'ADMIN' ? (
-    <AdminScreen user={props.user} onSignOut={props.onSignOut ?? (() => {})} />
+    <AdminScreen user={props.user} onSignOut={props.onSignOut ?? (() => {})} search={props.search ?? window.location.search} />
   ) : (
     <AccountScreen {...props} />
   )

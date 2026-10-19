@@ -21,3 +21,11 @@ databaseChangeLog:
       file: db/changelog/changes/010-seed-test-user.yaml
   - include:
       file: db/changelog/changes/011-seed-test-admin.yaml
+  - include:
+      file: db/changelog/changes/012-create-requests.yaml
+  - include:
+      file: db/changelog/changes/013-seed-test-request.yaml
+  - include:
+      file: db/changelog/changes/014-request-number.yaml
+  - include:
+      file: db/changelog/changes/015-drop-request-status.yaml

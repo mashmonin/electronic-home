@@ -1,0 +1,131 @@
+databaseChangeLog:
+  - changeSet:
+      id: 012-create-requests
+      author: electronic-home
+      changes:
+        - createTable:
+            tableName: requests
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_requests
+              - column:
+                  name: account_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_requests_account
+                    references: accounts(id)
+              # the owner who wrote the request; users with requests cannot be deleted
+              - column:
+                  name: author_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_requests_author
+                    references: users(id)
+              - column:
+                  name: subject
+                  type: varchar(120)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: varchar(8)
+                  defaultValue: OPEN
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+              # the time of the newest message: the list is sorted by it without joining the messages
+              - column:
+                  name: last_message_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_test
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: ALTER TABLE requests ADD CONSTRAINT ck_requests_status CHECK (status IN ('OPEN', 'CLOSED'))
+        - sql:
+            sql: ALTER TABLE requests ADD CONSTRAINT ck_requests_subject CHECK (length(btrim(subject)) > 0)
+        - createIndex:
+            tableName: requests
+            indexName: ix_requests_author_last_message
+            columns:
+              - column: { name: author_id }
+              - column: { name: last_message_at, descending: true }
+        - createIndex:
+            tableName: requests
+            indexName: ix_requests_status_last_message
+            columns:
+              - column: { name: status }
+              - column: { name: last_message_at, descending: true }
+        - createTable:
+            tableName: request_messages
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_request_messages
+              - column:
+                  name: request_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_request_messages_request
+                    references: requests(id)
+                    deleteCascade: true
+              - column:
+                  name: author_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_request_messages_author
+                    references: users(id)
+              - column:
+                  name: body
+                  type: varchar(2000)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_test
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: ALTER TABLE request_messages ADD CONSTRAINT ck_request_messages_body CHECK (length(btrim(body)) > 0)
+        - createIndex:
+            tableName: request_messages
+            indexName: ix_request_messages_request
+            columns:
+              - column: { name: request_id }
+              - column: { name: id }
+      rollback:
+        - dropTable:
+            tableName: request_messages
+        - dropTable:
+            tableName: requests

@@ -39,7 +39,10 @@ final class AuthSupport {
         }
     }
 
+    /** Deletes the user together with his requests (a user with requests cannot be deleted otherwise). */
     static void deleteUser(JdbcTemplate jdbc, String login) {
+        jdbc.update("DELETE FROM request_messages WHERE author_id IN (SELECT id FROM users WHERE login = ?)", login);
+        jdbc.update("DELETE FROM requests WHERE author_id IN (SELECT id FROM users WHERE login = ?)", login);
         jdbc.update("DELETE FROM users WHERE login = ?", login);
     }
 

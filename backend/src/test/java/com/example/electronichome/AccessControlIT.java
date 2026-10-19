@@ -68,6 +68,7 @@ class AccessControlIT {
 
     @AfterEach
     void cleanUp() {
+        jdbc.update("DELETE FROM requests WHERE NOT is_test");
         jdbc.update("DELETE FROM users WHERE login LIKE 'it-%'");
         jdbc.update("DELETE FROM meter_readings WHERE reading_date = CURRENT_DATE");
         jdbc.update("DELETE FROM receipts");
@@ -109,6 +110,17 @@ class AccessControlIT {
         java.util.List<String> numbers = new java.util.ArrayList<>();
         accounts.forEach(account -> numbers.add(account.get("number").asString()));
         assertThat(numbers).isSorted();
+    }
+
+    @Test
+    void requestsAreForOwnersAndAdministratorsOnly() throws Exception {
+        assertThat(get("/api/requests", null).statusCode()).isEqualTo(401);
+        assertThat(get("/api/requests", resident).statusCode()).isEqualTo(403);
+        assertThat(get("/api/requests", owner).statusCode()).isEqualTo(200);
+        assertThat(get("/api/requests", admin).statusCode()).isEqualTo(200);
+        assertThat(get("/api/requests/1/messages", resident).statusCode()).isEqualTo(403);
+        assertThat(call("POST", "/api/requests", resident, "{\"text\":\"т\"}").statusCode()).isEqualTo(403);
+        assertThat(call("POST", "/api/requests", admin, "{\"text\":\"т\"}").statusCode()).isEqualTo(403);
     }
 
     @Test

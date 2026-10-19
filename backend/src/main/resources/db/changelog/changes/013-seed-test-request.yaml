@@ -1,0 +1,28 @@
+databaseChangeLog:
+  - changeSet:
+      id: 013-seed-test-request
+      author: electronic-home
+      context: dev
+      changes:
+        # one conversation of the test owner; the answer of the administrator is added only if "admin" exists
+        - sql:
+            sql: >
+              INSERT INTO requests (account_id, author_id, subject, status, created_at, last_message_at, is_test)
+              SELECT a.id, u.id, 'Тестовая заявка', 'OPEN', now() - interval '1 hour', now() - interval '30 minutes', TRUE
+              FROM users u, accounts a
+              WHERE u.login = 'owner' AND u.is_test AND a.number = '000000000001'
+        - sql:
+            sql: >
+              INSERT INTO request_messages (request_id, author_id, body, created_at, is_test)
+              SELECT r.id, r.author_id, 'Здравствуйте! Подскажите, когда отключат горячую воду?', now() - interval '1 hour', TRUE
+              FROM requests r WHERE r.subject = 'Тестовая заявка' AND r.is_test
+        - sql:
+            sql: >
+              INSERT INTO request_messages (request_id, author_id, body, created_at, is_test)
+              SELECT r.id, u.id, 'Добрый день! Отключение запланировано на следующую неделю, объявление появится в подъезде.', now() - interval '30 minutes', TRUE
+              FROM requests r, users u WHERE r.subject = 'Тестовая заявка' AND r.is_test AND lower(u.login) = 'admin'
+      rollback:
+        - sql:
+            sql: DELETE FROM request_messages WHERE is_test
+        - sql:
+            sql: DELETE FROM requests WHERE is_test

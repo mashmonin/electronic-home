@@ -1,0 +1,53 @@
+databaseChangeLog:
+  - changeSet:
+      id: 014-request-number
+      author: electronic-home
+      changes:
+        # the number of a request: О-ддммгг-NNNN, the last part runs through all the requests (see RequestNumbers)
+        - sql:
+            sql: CREATE SEQUENCE request_number_seq START WITH 1
+        - addColumn:
+            tableName: requests
+            columns:
+              - column:
+                  name: number
+                  type: varchar(24)
+        # the requests that already exist get numbers in the order they were created
+        - sql:
+            sql: |
+              WITH numbered AS (SELECT id, row_number() OVER (ORDER BY id) AS seq FROM requests)
+              UPDATE requests r
+              SET number = 'О-' || to_char(r.created_at, 'DDMMYY') || '-' || lpad(n.seq::text, 4, '0')
+              FROM numbered n WHERE n.id = r.id
+        - sql:
+            sql: SELECT setval('request_number_seq', GREATEST((SELECT count(*) FROM requests), 1), (SELECT count(*) FROM requests) > 0)
+        - addNotNullConstraint:
+            tableName: requests
+            columnName: number
+            columnDataType: varchar(24)
+        - addUniqueConstraint:
+            tableName: requests
+            columnNames: number
+            constraintName: uq_requests_number
+        - sql:
+            sql: ALTER TABLE requests ADD CONSTRAINT ck_requests_number CHECK (length(btrim(number)) > 0)
+        # a request has no subject any more: the number is its name
+        - sql:
+            sql: ALTER TABLE requests DROP CONSTRAINT ck_requests_subject
+        - dropColumn:
+            tableName: requests
+            columnName: subject
+      rollback:
+        - sql:
+            sql: ALTER TABLE requests ADD COLUMN subject varchar(120)
+        - sql:
+            sql: UPDATE requests SET subject = number
+        - sql:
+            sql: ALTER TABLE requests ALTER COLUMN subject SET NOT NULL
+        - sql:
+            sql: ALTER TABLE requests ADD CONSTRAINT ck_requests_subject CHECK (length(btrim(subject)) > 0)
+        - dropColumn:
+            tableName: requests
+            columnName: number
+        - sql:
+            sql: DROP SEQUENCE request_number_seq
