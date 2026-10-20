@@ -34,10 +34,6 @@ services:
     build: ./backend
     environment:
       S3_ENDPOINT: http://s3:8333
-      # the files of the receipts that were kept on a volume are copied into the storage once (read only)
-      RECEIPTS_MIGRATION_SOURCE_PATH: /data/receipts-legacy
-    volumes:
-      - receipts_data:/data/receipts-legacy:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -46,5 +42,4 @@ services:
 
 volumes:
   postgres_data:
-  receipts_data:
   s3_data:

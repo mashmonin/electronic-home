@@ -9,15 +9,9 @@ import org.springframework.util.unit.DataSize;
  *
  * @param maxSize    the biggest accepted file
  * @param adminToken the token that allows publishing; blank means that publishing is switched off
- * @param migration  where the files were kept before the object storage
  */
 @ConfigurationProperties("receipts")
 public record ReceiptProperties(
         @DefaultValue("5MB") DataSize maxSize,
-        @DefaultValue("") String adminToken,
-        @DefaultValue Migration migration) {
-
-    /** @param sourcePath the directory whose files are copied into the storage once at the start; blank means none */
-    public record Migration(@DefaultValue("") String sourcePath) {
-    }
+        @DefaultValue("") String adminToken) {
 }

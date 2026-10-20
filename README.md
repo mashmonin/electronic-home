@@ -86,12 +86,6 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.
   сами при первом обращении.
 - **Состояние.** Входит в `GET /api/actuator/health` (компонент `objectStorage`); при остановленном хранилище здоровье
   `DOWN`, операции с файлами дают `503`, остальные возможности (показания, текст чатов) работают.
-- **Перенос старых квитанций.** Раньше PDF лежали файлами на томе `receipts_data`. При старте приложение копирует в
-  хранилище файлы тех записей `receipts`, которых там ещё нет (под тем же ключом, с проверкой размера и SHA-256), и пишет в
-  журнал итог. Это безопасно повторять, исходные файлы не удаляются. В Docker том `receipts_data` монтируется в бэкенд
-  только для чтения в `/data/receipts-legacy`; в dev берётся `./data/receipts`. Убедившись по журналу
-  («copied N, already there M, no source file 0, errors 0») и скачав пару квитанций, старый том можно удалить:
-  `docker volume rm <проект>_receipts_data` (и убрать его из `docker-compose.yml`).
 - **Резервное копирование.** Один узел без репликации: сохраняйте том `s3_data` вместе с БД (например, остановив `s3` и
   скопировав том, либо `docker run --rm -v <проект>_s3_data:/data -v $PWD:/backup alpine tar czf /backup/s3.tgz /data`).
 - **Ограничения.** Версий объектов, репликации, антивируса и очистки осиротевших объектов нет.
@@ -133,7 +127,6 @@ curl -X PUT 'https://localhost/api/accounts/000000000001/receipts/2026-10?capita
 
 | Параметр | По умолчанию | Описание |
 |---|---|---|
-| `receipts.migration.source-path` (`RECEIPTS_MIGRATION_SOURCE_PATH`) | dev: `./data/receipts`; Docker: `/data/receipts-legacy` | Каталог со старыми файлами, которые один раз копируются в хранилище (см. «Хранилище файлов»). |
 | `receipts.max-size` (`RECEIPTS_MAX_SIZE`) | `5MB` | Максимальный размер файла; nginx пропускает тело до 6 МБ (`client_max_body_size`), при изменении лимита поправьте и его. |
 | `receipts.admin-token` (`RECEIPTS_ADMIN_TOKEN`) | нет (`dev`: `dev-admin-token`) | Токен публикации. |
 

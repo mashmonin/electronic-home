@@ -34,7 +34,3 @@ storage:
     access-key: ${S3_ACCESS_KEY}
     secret-key: ${S3_SECRET_KEY}
 
-# The old directory of the receipts (mounted read only in Docker): its files are copied into the storage once.
-receipts:
-  migration:
-    source-path: ${RECEIPTS_MIGRATION_SOURCE_PATH:}
