@@ -107,6 +107,10 @@ class RequestsApiIT {
     }
 
     private int write(String bearer, long id, String text) throws Exception {
+        // the administrator writes only into a request that is in work
+        if (bearer == admin) {
+            jdbc.update("UPDATE requests SET status = 'IN_PROGRESS' WHERE id = ? AND status = 'ACCEPTED'", id);
+        }
         return call("POST", "/api/requests/" + id + "/messages", bearer, text(text)).statusCode();
     }
 
@@ -254,14 +258,18 @@ class RequestsApiIT {
     }
 
     @Test
-    void theListHoldsAtMost200Requests() throws Exception {
+    void theListGivesAPageOfFiveAndTheTotal() throws Exception {
         jdbc.update("""
                 INSERT INTO requests (account_id, author_id, number)
                 SELECT a.id, u.id, 'О-000000-' || g FROM generate_series(1, 205) g, accounts a, users u
                 WHERE a.number = ? AND u.login = 'it-owner1'""", ACCOUNT_1);
         jdbc.update("INSERT INTO request_messages (request_id, author_id, body) SELECT r.id, r.author_id, 'текст' FROM requests r WHERE NOT r.is_test");
 
-        assertThat(previews(owner1, "")).hasSize(200);
+        assertThat(previews(owner1, "")).hasSize(5);
+        JsonNode page = body(call("GET", "/api/requests?page=41", owner1, null));
+        assertThat(page.get("requests")).hasSize(5);
+        assertThat(page.get("total").asLong()).isEqualTo(205);
+        assertThat(body(call("GET", "/api/requests?page=42", owner1, null)).get("requests")).isEmpty();
     }
 
     @Test

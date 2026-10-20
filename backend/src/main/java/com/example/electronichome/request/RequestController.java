@@ -48,8 +48,9 @@ class RequestController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
-    RequestResponses.Items list(Authentication authentication, @RequestParam(required = false) String q) {
-        return new RequestResponses.Items(service.list(caller(authentication), q));
+    RequestResponses.Items list(
+            Authentication authentication, @RequestParam(required = false) String q, @RequestParam(required = false) String page) {
+        return service.list(caller(authentication), q, page);
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -81,6 +82,25 @@ class RequestController {
     @PreAuthorize("hasRole('ADMIN')")
     RequestResponses.Item changeStatus(Authentication authentication, @PathVariable long id, @RequestBody NewStatus body) {
         return service.changeStatus(caller(authentication), id, body.status());
+    }
+
+    // A request that is done is returned to the work by its author with a message (required); the status and the message are one step.
+    @PostMapping(value = "/{id}/reopen", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('OWNER')")
+    RequestResponses.Reopened reopen(Authentication authentication, @PathVariable long id, @RequestBody NewMessage body) {
+        return service.reopen(caller(authentication), id, body.text(), List.of());
+    }
+
+    @PostMapping(value = "/{id}/reopen", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasRole('OWNER')")
+    RequestResponses.Reopened reopenWithFiles(
+            Authentication authentication,
+            @PathVariable long id,
+            @RequestParam(value = "text", required = false) String text,
+            @RequestPart(value = "files", required = false) List<MultipartFile> files) {
+        return service.reopen(caller(authentication), id, text, files);
     }
 
     @GetMapping("/{id}/messages")

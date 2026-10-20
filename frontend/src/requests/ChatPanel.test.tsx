@@ -182,13 +182,13 @@ describe('there is no closing', () => {
     expect(screen.queryByRole('button', { name: 'Закрыть заявку' })).not.toBeInTheDocument()
   })
 
-  it('says the request is closed when the server refuses the message with a conflict', async () => {
+  it('says that writing is not possible now when the server refuses the message with a conflict', async () => {
     const server = await openChat()
     server.fail.send = 409
     type('Текст')
 
     fireEvent.click(sendButton())
 
-    expect(await screen.findByText('Заявка закрыта, писать в неё нельзя')).toBeInTheDocument()
+    expect(await screen.findByText('Сейчас писать в эту заявку нельзя')).toBeInTheDocument()
   })
 })

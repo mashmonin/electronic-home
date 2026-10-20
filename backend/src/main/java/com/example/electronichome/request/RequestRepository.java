@@ -14,7 +14,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 class RequestRepository {
 
-    static final int MAX_REQUESTS = 200;
+    static final int PAGE_SIZE = 5;
     static final int MAX_MESSAGES = 500;
     private static final int PREVIEW_LENGTH = 120;
 
@@ -32,13 +32,7 @@ class RequestRepository {
             JOIN users au ON au.id = r.author_id
             JOIN LATERAL (SELECT m.body, m.author_id,
                                  (SELECT count(*) FROM request_attachments x WHERE x.message_id = m.id) AS last_files,
-                                 (SELECT min(x.file_name) FROM request_attachments x WHERE x.message_id = m.id) AS last_file_name,
-                                 -- the first message after the last answer of an administrator: since when the owner waits
-                                 (SELECT min(w.created_at) FROM request_messages w
-                                  WHERE w.request_id = r.id
-                                    AND w.id > COALESCE((SELECT max(a2.id) FROM request_messages a2
-                                                         JOIN users u2 ON u2.id = a2.author_id
-                                                         WHERE a2.request_id = r.id AND u2.role = 'ADMIN'), 0)) AS waiting_since
+                                 (SELECT min(x.file_name) FROM request_attachments x WHERE x.message_id = m.id) AS last_file_name
                           FROM request_messages m WHERE m.request_id = r.id ORDER BY m.id DESC LIMIT 1) lm ON TRUE
             JOIN users lu ON lu.id = lm.author_id
             """;
@@ -50,21 +44,33 @@ class RequestRepository {
     }
 
     /**
-     * The requests the user may see whose number has the fragment (all of them for a null fragment): first those that
-     * wait for an answer, the longest waiting first, then the answered ones, the newest activity first.
+     * One page of the requests the user may see whose number has the fragment (all of them for a null fragment): by the
+     * status (accepted, in work, done), inside a status the earliest created first. The pages are {@value #PAGE_SIZE}
+     * requests long, the first one is 1.
      */
-    List<RequestResponses.Item> list(long userId, boolean admin, String fragment) {
+    List<RequestResponses.Item> list(long userId, boolean admin, String fragment, int page) {
         return jdbc.sql(ITEM_SELECT + """
                         WHERE (:admin OR r.author_id = :userId) AND (CAST(:fragment AS varchar) IS NULL OR position(:fragment IN r.number) > 0)
-                        ORDER BY (lu.role = 'OWNER' AND r.status <> 'CLOSED') DESC,
-                                 CASE WHEN lu.role = 'OWNER' AND r.status <> 'CLOSED' THEN lm.waiting_since END ASC,
-                                 r.last_message_at DESC, r.id DESC
-                        LIMIT %d""".formatted(MAX_REQUESTS))
+                        ORDER BY CASE r.status WHEN 'ACCEPTED' THEN 0 WHEN 'IN_PROGRESS' THEN 1 ELSE 2 END,
+                                 r.created_at ASC, r.id ASC
+                        LIMIT %d OFFSET %d""".formatted(PAGE_SIZE, (long) (page - 1) * PAGE_SIZE))
                 .param("admin", admin)
                 .param("userId", userId)
                 .param("fragment", fragment)
                 .query((rs, row) -> toItem(rs))
                 .list();
+    }
+
+    /** How many requests the user may see with the fragment in the number: for the pages. */
+    long count(long userId, boolean admin, String fragment) {
+        return jdbc.sql("""
+                        SELECT count(*) FROM requests r
+                        WHERE (:admin OR r.author_id = :userId) AND (CAST(:fragment AS varchar) IS NULL OR position(:fragment IN r.number) > 0)""")
+                .param("admin", admin)
+                .param("userId", userId)
+                .param("fragment", fragment)
+                .query(Long.class)
+                .single();
     }
 
     Optional<RequestResponses.Item> find(long id, long userId, boolean admin) {
@@ -218,7 +224,7 @@ class RequestRepository {
                 rs.getString("number"),
                 rs.getString("kind"),
                 rs.getString("status"),
-                "OWNER".equals(rs.getString("last_role")) && !"CLOSED".equals(rs.getString("status")),
+                "OWNER".equals(rs.getString("last_role")) && !"DONE".equals(rs.getString("status")),
                 instant(rs, "created_at"),
                 instant(rs, "last_message_at"),
                 new RequestResponses.LastMessage(preview, rs.getString("last_role")),

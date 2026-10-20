@@ -1,5 +1,5 @@
 import { SearchOutlined } from '@ant-design/icons'
-import { Alert, Button, Empty, Flex, Grid, Input, Spin, Typography } from 'antd'
+import { Alert, Button, Empty, Flex, Grid, Input, Pagination, Spin, Typography } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import type { Me } from '../auth/authApi'
 import { requestFromSearch, writeRequest } from '../readings/tabs'
@@ -13,7 +13,7 @@ const LIST_POLL_MS = 15000
 // How long the typing may pause before the search is sent: one request for a word, not for every letter.
 const SEARCH_DELAY_MS = 300
 
-type List = { kind: 'loading' } | { kind: 'ready'; requests: RequestItem[] } | { kind: 'error' }
+type List = { kind: 'loading' } | { kind: 'ready'; requests: RequestItem[]; total: number; pageSize: number } | { kind: 'error' }
 
 interface Props {
   user: Me
@@ -39,6 +39,8 @@ export default function RequestsTab({ user, search = window.location.search }: P
   const [fragment, setFragment] = useState('')
   const [list, setList] = useState<List>({ kind: 'loading' })
   const [attempt, setAttempt] = useState(0)
+  // the page of the list (from 1); a new search or a new request brings the list back to the first one
+  const [page, setPage] = useState(1)
   const [selectedId, setSelectedId] = useState<number | null>(() => requestFromSearch(search))
   const [creating, setCreating] = useState(false)
   // the chosen request stays open in the chat while a search leaves it out of the list
@@ -47,27 +49,34 @@ export default function RequestsTab({ user, search = window.location.search }: P
   useEffect(() => {
     if (typed.trim() === fragment) return
     // an emptied field shows the whole list at once, a word is sent after the pause
-    const timer = setTimeout(() => setFragment(typed.trim()), typed.trim() === '' ? 0 : SEARCH_DELAY_MS)
+    const timer = setTimeout(() => {
+      setFragment(typed.trim())
+      setPage(1)
+    }, typed.trim() === '' ? 0 : SEARCH_DELAY_MS)
     return () => clearTimeout(timer)
   }, [typed, fragment])
 
   useEffect(() => {
     let cancelled = false
     setList({ kind: 'loading' })
-    fetchRequests(fragment).then((result) => {
+    fetchRequests(fragment, page).then((result) => {
       if (cancelled) return
-      setList(result.status === 'ok' ? { kind: 'ready', requests: result.requests } : { kind: 'error' })
+      setList(
+        result.status === 'ok'
+          ? { kind: 'ready', requests: result.requests, total: result.total, pageSize: result.pageSize }
+          : { kind: 'error' },
+      )
     })
     return () => {
       cancelled = true
     }
-  }, [fragment, attempt])
+  }, [fragment, attempt, page])
 
   // Reloads the list in place: no spinner, the chosen request and the typed text stay; a failure is skipped.
   const refresh = useCallback(async () => {
-    const result = await fetchRequests(fragment)
-    if (result.status === 'ok') setList({ kind: 'ready', requests: result.requests })
-  }, [fragment])
+    const result = await fetchRequests(fragment, page)
+    if (result.status === 'ok') setList({ kind: 'ready', requests: result.requests, total: result.total, pageSize: result.pageSize })
+  }, [fragment, page])
 
   usePolling(() => void refresh(), LIST_POLL_MS, list.kind === 'ready')
 
@@ -77,6 +86,12 @@ export default function RequestsTab({ user, search = window.location.search }: P
   }
 
   const requests = list.kind === 'ready' ? list.requests : []
+
+  // the page disappeared (requests were gone): go to the last one that is left
+  useEffect(() => {
+    if (list.kind !== 'ready' || list.requests.length > 0 || list.total === 0 || page <= 1) return
+    setPage(Math.max(1, Math.ceil(list.total / list.pageSize)))
+  }, [list, page])
   const listed = requests.find((request) => request.id === selectedId) ?? null
   const selected = listed ?? (pinned !== null && pinned.id === selectedId ? pinned : null)
 
@@ -91,13 +106,11 @@ export default function RequestsTab({ user, search = window.location.search }: P
     setCreating(false)
     setTyped('')
     setFragment('')
-    setList((previous) => ({
-      kind: 'ready',
-      requests: [request, ...(previous.kind === 'ready' ? previous.requests.filter((item) => item.id !== request.id) : [])],
-    }))
+    setPage(1)
     select(request.id)
+    setPinned(request)
     void fetchRequests().then((result) => {
-      if (result.status === 'ok') setList({ kind: 'ready', requests: result.requests })
+      if (result.status === 'ok') setList({ kind: 'ready', requests: result.requests, total: result.total, pageSize: result.pageSize })
     })
   }
 
@@ -159,6 +172,19 @@ export default function RequestsTab({ user, search = window.location.search }: P
                 <RequestList requests={requests} selectedId={selected?.id ?? null} showOwner={admin} onSelect={select} />
               )}
             </div>
+            {list.kind === 'ready' && list.total > list.pageSize && (
+              <Flex justify="center" style={{ padding: 8, borderTop: '1px solid #f0f0f0' }}>
+                <Pagination
+                  size="small"
+                  simple
+                  current={page}
+                  total={list.total}
+                  pageSize={list.pageSize}
+                  showSizeChanger={false}
+                  onChange={setPage}
+                />
+              </Flex>
+            )}
           </Flex>
         )}
 

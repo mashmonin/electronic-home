@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 019-drop-closed-status
+      author: electronic-home
+      changes:
+        # "closed" is gone: the end of the work of the administrator is DONE
+        - sql:
+            sql: UPDATE requests SET status = 'DONE' WHERE status = 'CLOSED'
+        - sql:
+            sql: ALTER TABLE requests DROP CONSTRAINT ck_requests_status
+        - sql:
+            sql: ALTER TABLE requests ADD CONSTRAINT ck_requests_status CHECK (status IN ('ACCEPTED', 'IN_PROGRESS', 'DONE'))
+      rollback:
+        - sql:
+            sql: ALTER TABLE requests DROP CONSTRAINT ck_requests_status
+        - sql:
+            sql: ALTER TABLE requests ADD CONSTRAINT ck_requests_status CHECK (status IN ('ACCEPTED', 'IN_PROGRESS', 'DONE', 'CLOSED'))

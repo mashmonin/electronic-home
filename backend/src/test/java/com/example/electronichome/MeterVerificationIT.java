@@ -101,6 +101,7 @@ class MeterVerificationIT {
     @AfterEach
     void cleanUp() {
         jdbc.execute("DROP TRIGGER IF EXISTS it_fail_attachment ON request_attachments");
+        jdbc.execute("DROP TRIGGER IF EXISTS it_fail_message ON request_messages");
         jdbc.update("DELETE FROM meter_act_uploads");
         jdbc.update("DELETE FROM meter_verification_acts");
         jdbc.update("DELETE FROM requests WHERE NOT is_test");
@@ -517,19 +518,52 @@ class MeterVerificationIT {
     // ---- the statuses
 
     @Test
-    void aRequestMovesOneStepAtATimeUntilItIsClosed() throws Exception {
+    void aRequestMovesOneStepAtATimeAndDoneIsTheLastStepOfTheAdministrator() throws Exception {
         long id = body(call("POST", "/api/requests", owner1, "{\"text\":\"Течёт кран\"}")).get("id").asLong();
 
         assertThat(step(admin, id, "DONE")).isEqualTo(409);
         assertThat(step(admin, id, "ACCEPTED")).isEqualTo(409);
         assertThat(step(admin, id, "IN_PROGRESS")).isEqualTo(200);
         assertThat(step(admin, id, "IN_PROGRESS")).isEqualTo(409);
-        assertThat(step(admin, id, "CLOSED")).isEqualTo(409);
+        assertThat(step(admin, id, "CLOSED")).isEqualTo(400);
         assertThat(step(admin, id, "DONE")).isEqualTo(200);
         assertThat(step(admin, id, "IN_PROGRESS")).isEqualTo(409);
-        assertThat(step(admin, id, "CLOSED")).isEqualTo(200);
-        assertThat(step(admin, id, "CLOSED")).isEqualTo(409);
-        assertThat(statusOf(id)).isEqualTo("CLOSED");
+        assertThat(step(admin, id, "DONE")).isEqualTo(409);
+        assertThat(statusOf(id)).isEqualTo("DONE");
+    }
+
+    @Test
+    void doneAddsTheThanksToTheChatFromTheAdministratorAndTakingIntoWorkAddsNothing() throws Exception {
+        long id = body(call("POST", "/api/requests", owner1, "{\"text\":\"Течёт кран\"}")).get("id").asLong();
+        step(admin, id, "IN_PROGRESS");
+        assertThat(count("SELECT count(*) FROM request_messages WHERE request_id = ?", id)).isEqualTo(1);
+
+        step(admin, id, "DONE");
+
+        JsonNode messages = body(call("GET", "/api/requests/" + id + "/messages", owner1, null)).get("messages");
+        assertThat(messages).hasSize(2);
+        assertThat(messages.get(1).get("text").asString()).isEqualTo("Благодарим за обращение, заявка выполнена.");
+        assertThat(messages.get(1).get("author").get("role").asString()).isEqualTo("ADMIN");
+        JsonNode item = body(call("GET", "/api/requests/" + id, owner1, null));
+        assertThat(item.get("last_message").get("text").asString()).isEqualTo("Благодарим за обращение, заявка выполнена.");
+        assertThat(item.get("awaiting_reply").asBoolean()).isFalse();
+    }
+
+    @Test
+    void whenTheThanksCannotBeSavedTheStatusStaysInProgress() throws Exception {
+        long id = body(call("POST", "/api/requests", owner1, "{\"text\":\"Течёт кран\"}")).get("id").asLong();
+        step(admin, id, "IN_PROGRESS");
+        jdbc.execute("""
+                CREATE OR REPLACE FUNCTION it_fail_message() RETURNS trigger AS $$
+                BEGIN RAISE EXCEPTION 'the test breaks the database'; END $$ LANGUAGE plpgsql""");
+        jdbc.execute("CREATE TRIGGER it_fail_message BEFORE INSERT ON request_messages FOR EACH ROW EXECUTE FUNCTION it_fail_message()");
+        try {
+            assertThat(step(admin, id, "DONE")).isGreaterThanOrEqualTo(500);
+        } finally {
+            jdbc.execute("DROP TRIGGER IF EXISTS it_fail_message ON request_messages");
+        }
+
+        assertThat(statusOf(id)).isEqualTo("IN_PROGRESS");
     }
 
     @Test
@@ -542,19 +576,111 @@ class MeterVerificationIT {
         assertThat(statusOf(id)).isEqualTo("ACCEPTED");
     }
 
-    @Test
-    void aClosedRequestTakesNoMessagesAndDoesNotWaitForAnAnswer() throws Exception {
+    private long inStatus(String status) throws Exception {
         long id = body(call("POST", "/api/requests", owner1, "{\"text\":\"Течёт кран\"}")).get("id").asLong();
-        step(admin, id, "IN_PROGRESS");
-        step(admin, id, "DONE");
-        assertThat(call("POST", "/api/requests/" + id + "/messages", owner1, "{\"text\":\"Ещё вопрос\"}").statusCode()).isEqualTo(201);
-        step(admin, id, "CLOSED");
+        if (!status.equals("ACCEPTED")) {
+            step(admin, id, "IN_PROGRESS");
+        }
+        if (status.equals("DONE")) {
+            step(admin, id, "DONE");
+        }
+        return id;
+    }
 
-        assertThat(call("POST", "/api/requests/" + id + "/messages", owner1, "{\"text\":\"Поздно\"}").statusCode()).isEqualTo(409);
-        assertThat(call("POST", "/api/requests/" + id + "/messages", admin, "{\"text\":\"Поздно\"}").statusCode()).isEqualTo(409);
-        assertThat(call("GET", "/api/requests/" + id + "/messages", owner1, null).statusCode()).isEqualTo(200);
-        assertThat(body(call("GET", "/api/requests/" + id, owner1, null)).get("awaiting_reply").asBoolean()).isFalse();
+    private int send(String bearer, long id, String text) throws Exception {
+        return call("POST", "/api/requests/" + id + "/messages", bearer, json.createObjectNode().put("text", text).toString()).statusCode();
+    }
+
+    @Test
+    void whoMayWriteDependsOnTheRoleAndTheStatus() throws Exception {
+        long accepted = inStatus("ACCEPTED");
+        long inProgress = inStatus("IN_PROGRESS");
+        long done = inStatus("DONE");
+
+        assertThat(send(owner1, accepted, "Ещё")).isEqualTo(201);
+        assertThat(send(admin, accepted, "Рано")).isEqualTo(409);
+        assertThat(send(owner1, inProgress, "Ещё")).isEqualTo(201);
+        assertThat(send(admin, inProgress, "Работаем")).isEqualTo(201);
+        assertThat(send(owner1, done, "Поздно")).isEqualTo(409);
+        assertThat(send(admin, done, "Поздно")).isEqualTo(409);
+        assertThat(call("GET", "/api/requests/" + done + "/messages", owner1, null).statusCode()).isEqualTo(200);
+        assertThat(count("SELECT count(*) FROM request_messages WHERE request_id = ?", accepted)).isEqualTo(2);
+        assertThat(count("SELECT count(*) FROM request_messages WHERE request_id = ?", done)).isEqualTo(2);
+    }
+
+    private HttpResponse<String> reopen(String bearer, long id, String text) throws Exception {
+        return call("POST", "/api/requests/" + id + "/reopen", bearer, text == null ? "{}" : json.createObjectNode().put("text", text).toString());
+    }
+
+    @Test
+    void theAuthorReturnsADoneRequestToTheWorkWithAMessage() throws Exception {
+        long id = inStatus("DONE");
+
+        HttpResponse<String> response = reopen(owner1, id, "Не помогло");
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(201);
+        JsonNode answer = body(response);
+        assertThat(answer.get("request").get("status").asString()).isEqualTo("IN_PROGRESS");
+        assertThat(answer.get("request").get("awaiting_reply").asBoolean()).isTrue();
+        assertThat(answer.get("message").get("text").asString()).isEqualTo("Не помогло");
+        assertThat(answer.get("message").get("mine").asBoolean()).isTrue();
+        assertThat(statusOf(id)).isEqualTo("IN_PROGRESS");
+        // the administrator writes again
+        assertThat(send(admin, id, "Разберёмся")).isEqualTo(201);
+    }
+
+    @Test
+    void aReturnWithoutAMessageChangesNothing() throws Exception {
+        long id = inStatus("DONE");
+
+        assertThat(reopen(owner1, id, null).statusCode()).isEqualTo(400);
+        assertThat(reopen(owner1, id, "   ").statusCode()).isEqualTo(400);
+        assertThat(reopen(owner1, id, "я".repeat(2001)).statusCode()).isEqualTo(400);
+
+        assertThat(statusOf(id)).isEqualTo("DONE");
         assertThat(count("SELECT count(*) FROM request_messages WHERE request_id = ?", id)).isEqualTo(2);
+    }
+
+    @Test
+    void aRequestThatIsNotDoneIsNotReturned() throws Exception {
+        long accepted = inStatus("ACCEPTED");
+        long inProgress = inStatus("IN_PROGRESS");
+
+        assertThat(reopen(owner1, accepted, "Текст").statusCode()).isEqualTo(409);
+        assertThat(reopen(owner1, inProgress, "Текст").statusCode()).isEqualTo(409);
+        assertThat(count("SELECT count(*) FROM request_messages WHERE request_id = ?", inProgress)).isEqualTo(1);
+    }
+
+    @Test
+    void onlyTheAuthorReturnsARequest() throws Exception {
+        long id = inStatus("DONE");
+
+        assertThat(reopen(admin, id, "Текст").statusCode()).isEqualTo(403);
+        assertThat(reopen(resident, id, "Текст").statusCode()).isEqualTo(403);
+        assertThat(reopen(owner2, id, "Текст").statusCode()).isEqualTo(404);
+        assertThat(reopen(null, id, "Текст").statusCode()).isEqualTo(401);
+        assertThat(statusOf(id)).isEqualTo("DONE");
+    }
+
+    @Test
+    void aReturnMayCarryAFile() throws Exception {
+        long id = inStatus("DONE");
+        String boundary = "----it" + UUID.randomUUID();
+        String crlf = "\r\n";
+        String body = "--" + boundary + crlf + "Content-Disposition: form-data; name=\"text\"" + crlf + crlf + "Смотрите схему" + crlf
+                + "--" + boundary + crlf + "Content-Disposition: form-data; name=\"files\"; filename=\"schema.pdf\"" + crlf
+                + "Content-Type: application/octet-stream" + crlf + crlf + "%PDF-1.4 content" + crlf + "--" + boundary + "--" + crlf;
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/requests/" + id + "/reopen"))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header("Authorization", owner1)
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                .build();
+
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).as(response.body()).isEqualTo(201);
+        assertThat(body(response).get("message").get("attachments")).hasSize(1);
+        assertThat(statusOf(id)).isEqualTo("IN_PROGRESS");
     }
 
     @Test

@@ -33,7 +33,7 @@ final class RequestResponses {
             Author author) {
     }
 
-    record Items(List<Item> requests) {
+    record Items(List<Item> requests, int page, @JsonProperty("page_size") int pageSize, long total) {
     }
 
     record MessageAuthor(String login, String role) {
@@ -52,5 +52,9 @@ final class RequestResponses {
     }
 
     record Messages(List<Message> messages) {
+    }
+
+    /** The answer of the return to the work: the request with its new status and the message that came with it. */
+    record Reopened(Item request, Message message) {
     }
 }

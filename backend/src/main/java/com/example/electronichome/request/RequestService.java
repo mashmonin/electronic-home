@@ -21,6 +21,7 @@ class RequestService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RequestService.class);
 
     static final int MAX_TEXT = 2000;
+    static final String DONE_MESSAGE = "Благодарим за обращение, заявка выполнена.";
     private static final int MAX_FRAGMENT = 64;
 
     /** Who asks: the user of the token and whether he is an administrator. */
@@ -47,8 +48,24 @@ class RequestService {
     }
 
     @Transactional(readOnly = true)
-    List<RequestResponses.Item> list(Caller caller, String query) {
-        return requests.list(caller.id(), caller.admin(), fragmentOf(query));
+    RequestResponses.Items list(Caller caller, String query, String page) {
+        int number = 1;
+        if (page != null) {
+            try {
+                number = Integer.parseInt(page.strip());
+            } catch (NumberFormatException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page must be a number");
+            }
+            if (number < 1) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "page starts from 1");
+            }
+        }
+        String fragment = fragmentOf(query);
+        return new RequestResponses.Items(
+                requests.list(caller.id(), caller.admin(), fragment, number),
+                number,
+                RequestRepository.PAGE_SIZE,
+                requests.count(caller.id(), caller.admin(), fragment));
     }
 
     @Transactional(readOnly = true)
@@ -105,8 +122,8 @@ class RequestService {
         List<MultipartFile> parts = AttachmentStorage.realFiles(files);
         String cleanText = optionalText(text, parts.isEmpty());
         RequestResponses.Item request = requests.find(requestId, caller.id(), caller.admin()).orElseThrow(this::notFound);
-        if (RequestStatus.CLOSED.name().equals(request.status())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "The request is closed");
+        if (!RequestStatus.valueOf(request.status()).allowsMessagesOf(caller.admin())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Nobody writes into the request in this status");
         }
         List<AttachmentStorage.Stored> stored = attachments.store(parts);
         try {
@@ -144,7 +161,39 @@ class RequestService {
         if (wanted == RequestStatus.IN_PROGRESS && RequestKind.VERIFICATION.name().equals(request.kind())) {
             verifications.apply(id);
         }
+        if (wanted == RequestStatus.DONE) {
+            // the thanks go to the chat with the status: when the message is not saved, the status is not changed either
+            requests.insertMessage(id, caller.id(), DONE_MESSAGE);
+        }
         return requests.find(id, caller.id(), caller.admin()).orElseThrow();
+    }
+
+    /**
+     * The author returns a request that is DONE to the work, with a message that is required: the status and the message
+     * are saved in one transaction, the files are written before it and deleted when it fails.
+     */
+    RequestResponses.Reopened reopen(Caller caller, long requestId, String text, List<MultipartFile> files) {
+        List<MultipartFile> parts = AttachmentStorage.realFiles(files);
+        String cleanText = clean(text, MAX_TEXT);
+        RequestResponses.Item request = requests.find(requestId, caller.id(), caller.admin()).orElseThrow(this::notFound);
+        if (!RequestStatus.DONE.name().equals(request.status())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Only a request that is done is returned to the work");
+        }
+        List<AttachmentStorage.Stored> stored = attachments.store(parts);
+        try {
+            return transaction.execute(status -> {
+                if (!requests.changeStatus(requestId, RequestStatus.DONE, RequestStatus.IN_PROGRESS)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "The status has just been changed");
+                }
+                long id = requests.insertMessage(requestId, caller.id(), cleanText);
+                stored.forEach(file -> requests.insertAttachment(id, file));
+                return new RequestResponses.Reopened(
+                        requests.find(requestId, caller.id(), caller.admin()).orElseThrow(), requests.message(id, caller.id()).orElseThrow());
+            });
+        } catch (RuntimeException e) {
+            attachments.deleteQuietly(stored);
+            throw e;
+        }
     }
 
     /** The content of the file attached to a message of the request, or 404 for a request or a file the user cannot see. */

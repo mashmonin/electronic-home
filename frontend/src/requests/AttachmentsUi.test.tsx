@@ -265,6 +265,8 @@ describe('the files in the feed', () => {
 
   it('shows an administrator the files of the owner and lets him answer with a file', async () => {
     const server = withFiles()
+    // the administrator writes only into a request that is in work
+    server.requests.forEach((item) => (item.status = 'IN_PROGRESS'))
     await openChat(ADMIN, server)
     expect(screen.getByTestId('attachment-21')).toBeInTheDocument()
 

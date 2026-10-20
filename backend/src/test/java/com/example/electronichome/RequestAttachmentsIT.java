@@ -357,6 +357,7 @@ class RequestAttachmentsIT {
     @Test
     void anAdministratorMayAnswerWithAFile() throws Exception {
         long id = newRequest(owner1, "Первое");
+        jdbc.update("UPDATE requests SET status = 'IN_PROGRESS' WHERE id = ?", id);
 
         HttpResponse<String> response = multipart(messagesPath(id), admin, Part.field("text", "Образец заявления"), Part.file("образец.docx", filled(new byte[] {'P', 'K', 3, 4}, 500)));
 
@@ -371,6 +372,7 @@ class RequestAttachmentsIT {
         long id = newRequest(owner1, "Первое");
         multipart(messagesPath(id), owner1, Part.field("text", "один"), Part.file("a.pdf", pdf()), Part.file("b.pdf", pdf()));
         JsonNode first = body(call("GET", messagesPath(id), owner1, null)).get("messages").get(1);
+        jdbc.update("UPDATE requests SET status = 'IN_PROGRESS' WHERE id = ?", id);
         multipart(messagesPath(id), admin, Part.file("c.pdf", pdf()));
 
         JsonNode news = body(call("GET", messagesPath(id) + "?after=" + first.get("id").asLong(), owner1, null)).get("messages");

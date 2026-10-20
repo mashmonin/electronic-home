@@ -61,7 +61,8 @@ class RequestSchemaIT {
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThatThrownBy(() -> jdbc.update("UPDATE requests SET kind = 'OTHER' WHERE id = ?", id))
                 .isInstanceOf(DataIntegrityViolationException.class);
-        jdbc.update("UPDATE requests SET status = 'CLOSED', kind = 'VERIFICATION' WHERE id = ?", id);
+        jdbc.update("UPDATE requests SET status = 'DONE', kind = 'VERIFICATION' WHERE id = ?", id);
+        assertThatThrownBy(() -> jdbc.update("UPDATE requests SET status = 'CLOSED' WHERE id = ?", id)).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

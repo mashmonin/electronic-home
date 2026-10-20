@@ -5,7 +5,16 @@ import type { Me } from '../auth/authApi'
 import AttachmentList from './AttachmentList'
 import AttachmentPicker from './AttachmentPicker'
 import { authorLabel, formatTime, ownerLabel } from './format'
-import { type ChatMessage, type RequestItem, type SendResult, changeRequestStatus, fetchMessages, sendMessage } from './requestsApi'
+import {
+  type ChatMessage,
+  type RequestItem,
+  type ReopenResult,
+  type SendResult,
+  changeRequestStatus,
+  fetchMessages,
+  reopenRequest,
+  sendMessage,
+} from './requestsApi'
 import { STATUS_COLORS, STATUS_LABELS, nextStep } from './status'
 import { usePolling } from './usePolling'
 
@@ -29,9 +38,19 @@ const SEND_FAILURES: Record<Exclude<SendResult['status'], 'ok'>, string> = {
   unsupported: 'Тип файла не поддерживается',
   'not-found': 'Заявка недоступна',
   forbidden: 'Недостаточно прав',
-  closed: 'Заявка закрыта, писать в неё нельзя',
+  closed: 'Сейчас писать в эту заявку нельзя',
   invalid: 'Не удалось отправить сообщение. Попробуйте позже',
   error: 'Не удалось отправить сообщение. Попробуйте позже',
+}
+
+const REOPEN_FAILURES: Record<Exclude<ReopenResult['status'], 'ok'>, string> = {
+  invalid: 'Напишите сообщение, чтобы вернуть заявку в работу',
+  conflict: 'Статус заявки уже изменён',
+  'too-large': SEND_FAILURES['too-large'],
+  unsupported: SEND_FAILURES.unsupported,
+  'not-found': SEND_FAILURES['not-found'],
+  forbidden: SEND_FAILURES.forbidden,
+  error: 'Не удалось вернуть заявку в работу. Попробуйте позже',
 }
 
 // Adds the new messages to the old ones without repeating any (a message may come from the poll and from the sending).
@@ -49,8 +68,17 @@ export default function ChatPanel({ request: listed, user, narrow, onBack, onAct
   const [stepping, setStepping] = useState(false)
   const [stepFailure, setStepFailure] = useState<string | null>(null)
   useEffect(() => setRequest(listed), [listed])
-  const closed = request.status === 'CLOSED'
+  const done = request.status === 'DONE'
   const step = admin ? nextStep(request) : null
+  // the author of a done request opens the field with the button and writes the message that returns it to the work
+  const [returning, setReturning] = useState(false)
+  useEffect(() => {
+    if (!done) setReturning(false)
+  }, [done])
+  const canReturn = user.role === 'OWNER' && done
+  // the administrator writes only while the request is in work; a done request is closed for the writing until it is returned
+  const adminWaits = admin && request.status === 'ACCEPTED'
+  const locked = done ? !returning : adminWaits
   const [messages, setMessages] = useState<Messages>({ kind: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const [text, setText] = useState('')
@@ -100,7 +128,8 @@ export default function ChatPanel({ request: listed, user, narrow, onBack, onAct
 
   const trimmed = text.trim()
   const tooLong = trimmed.length > MESSAGE_LIMIT
-  const canSend = (trimmed.length > 0 || files.length > 0) && !tooLong && !sending && !closed
+  // a return needs the text; a message needs the text or a file
+  const canSend = (returning ? trimmed.length > 0 : trimmed.length > 0 || files.length > 0) && !tooLong && !sending && !locked
 
   const makeStep = async () => {
     if (!step || stepping) return
@@ -110,6 +139,8 @@ export default function ChatPanel({ request: listed, user, narrow, onBack, onAct
     setStepping(false)
     if (result.status === 'ok') {
       setRequest(result.request)
+      // the thanks of the administrator are in the chat at once, not with the next poll
+      void poll()
     } else {
       setStepFailure(
         result.status === 'conflict' ? 'Статус заявки уже изменён или шаг невозможен' : 'Не удалось изменить статус. Попробуйте позже',
@@ -123,6 +154,23 @@ export default function ChatPanel({ request: listed, user, narrow, onBack, onAct
     if (!canSend) return
     setSending(true)
     setFailure(null)
+    if (returning) {
+      const reopened = await reopenRequest(request.id, trimmed, files)
+      setSending(false)
+      if (reopened.status === 'ok') {
+        stickToEnd.current = true
+        setRequest(reopened.request)
+        append([reopened.message])
+        setText('')
+        setFiles([])
+        setReturning(false)
+      } else {
+        setFailure(REOPEN_FAILURES[reopened.status])
+      }
+      // after a failure too: the list shows the status the server has
+      onActivity()
+      return
+    }
     const result = await sendMessage(request.id, trimmed, files)
     setSending(false)
     if (result.status === 'ok') {
@@ -203,10 +251,35 @@ export default function ChatPanel({ request: listed, user, narrow, onBack, onAct
 
       <div style={{ padding: 16, borderTop: '1px solid #f0f0f0' }}>
         <Flex vertical gap={8}>
-          {closed && <Alert type="info" showIcon message="Заявка закрыта" />}
+          {done && !returning && (
+            <Alert
+              type="info"
+              showIcon
+              message="Заявка выполнена"
+              action={
+                canReturn ? (
+                  <Button size="small" onClick={() => setReturning(true)}>
+                    Вернуть в работу
+                  </Button>
+                ) : undefined
+              }
+            />
+          )}
+          {returning && <Alert type="info" showIcon message="Опишите, почему заявку нужно вернуть в работу" />}
+          {adminWaits && (
+            <Alert
+              type="info"
+              showIcon
+              message={
+                request.kind === 'VERIFICATION'
+                  ? 'Чтобы писать в чат, подтвердите заявку'
+                  : 'Чтобы писать в чат, возьмите заявку в работу'
+              }
+            />
+          )}
           {failure && <Alert type="error" showIcon message={failure} />}
           <Input.TextArea
-            disabled={closed}
+            disabled={locked}
             aria-label="Сообщение"
             placeholder="Введите сообщение"
             autoSize={{ minRows: 2, maxRows: 6 }}
@@ -221,10 +294,21 @@ export default function ChatPanel({ request: listed, user, narrow, onBack, onAct
             }}
           />
           {tooLong && <Typography.Text type="danger">Сообщение длиннее {MESSAGE_LIMIT} символов</Typography.Text>}
-          <AttachmentPicker files={files} onChange={setFiles} disabled={sending || closed} />
-          <Flex justify="flex-end">
+          <AttachmentPicker files={files} onChange={setFiles} disabled={sending || locked} />
+          <Flex justify="flex-end" gap={8}>
+            {returning && (
+              <Button
+                disabled={sending}
+                onClick={() => {
+                  setReturning(false)
+                  setFailure(null)
+                }}
+              >
+                Отмена
+              </Button>
+            )}
             <Button type="primary" disabled={!canSend} loading={sending} onClick={() => void send()}>
-              Отправить
+              {returning ? 'Вернуть в работу' : 'Отправить'}
             </Button>
           </Flex>
         </Flex>

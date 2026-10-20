@@ -56,11 +56,6 @@ export default function RequestList({ requests, selectedId, showOwner, onSelect 
               <Tag color={STATUS_COLORS[request.status]} style={{ marginInlineEnd: 0 }}>
                 {STATUS_LABELS[request.status]}
               </Tag>
-              {request.awaiting_reply && (
-                <Tag color="orange" style={{ marginInlineEnd: 0 }}>
-                  Ждёт ответа
-                </Tag>
-              )}
             </Flex>
             {showOwner && (
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>

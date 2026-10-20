@@ -1,7 +1,7 @@
 import { apiFetch } from '../auth/apiFetch'
 import type { Role } from '../auth/authApi'
 
-export type RequestStatus = 'ACCEPTED' | 'IN_PROGRESS' | 'DONE' | 'CLOSED'
+export type RequestStatus = 'ACCEPTED' | 'IN_PROGRESS' | 'DONE'
 
 /** GENERAL: written by an owner; VERIFICATION: made by the system when an owner changes the verification date of a meter. */
 export type RequestKind = 'GENERAL' | 'VERIFICATION'
@@ -39,17 +39,22 @@ export interface ChatMessage {
   attachments: Attachment[]
 }
 
-export type RequestsResult = { status: 'ok'; requests: RequestItem[] } | { status: 'error' }
+/** One page of the list: the server orders the requests and cuts the page; `total` is the number of all the requests found. */
+export type RequestsResult = { status: 'ok'; requests: RequestItem[]; page: number; pageSize: number; total: number } | { status: 'error' }
 
 // Never throws: any failure (network, server, unreadable answer) is reported in the result.
-// The server orders them (those without an answer first); `query` is a fragment of the number to look for.
-export async function fetchRequests(query?: string): Promise<RequestsResult> {
+// The server orders them (by the status, the earliest first) and cuts the page; `query` is a fragment of the number to look for.
+export async function fetchRequests(query?: string, page = 1): Promise<RequestsResult> {
   try {
     const fragment = query?.trim()
-    const response = await apiFetch(fragment ? `/api/requests?q=${encodeURIComponent(fragment)}` : '/api/requests')
+    const params = new URLSearchParams()
+    if (fragment) params.set('q', fragment)
+    if (page > 1) params.set('page', String(page))
+    const response = await apiFetch(params.size > 0 ? `/api/requests?${params.toString()}` : '/api/requests')
     if (!response.ok) return { status: 'error' }
-    const body = (await response.json()) as { requests?: RequestItem[] }
-    return { status: 'ok', requests: body.requests ?? [] }
+    const body = (await response.json()) as { requests?: RequestItem[]; page?: number; page_size?: number; total?: number }
+    const requests = body.requests ?? []
+    return { status: 'ok', requests, page: body.page ?? page, pageSize: body.page_size ?? (requests.length || 5), total: body.total ?? requests.length }
   } catch {
     return { status: 'error' }
   }
@@ -142,6 +147,30 @@ export async function changeRequestStatus(requestId: number, status: RequestStat
     })
     if (response.ok) return { status: 'ok', request: (await response.json()) as RequestItem }
     if (response.status === 409) return { status: 'conflict' }
+    if (response.status === 404) return { status: 'not-found' }
+    if (response.status === 403) return { status: 'forbidden' }
+    return { status: 'error' }
+  } catch {
+    return { status: 'error' }
+  }
+}
+
+export type ReopenResult =
+  | { status: 'ok'; request: RequestItem; message: ChatMessage }
+  | { status: 'invalid' | 'conflict' | 'too-large' | 'unsupported' | 'not-found' | 'forbidden' | 'error' }
+
+// The author returns a request that is done to the work: the message is required and goes with the change of the status.
+export async function reopenRequest(requestId: number, text: string, files: File[] = []): Promise<ReopenResult> {
+  try {
+    const response = await apiFetch(`/api/requests/${requestId}/reopen`, { method: 'POST', ...messageBody(text, files) })
+    if (response.status === 201) {
+      const body = (await response.json()) as { request: RequestItem; message: ChatMessage }
+      return { status: 'ok', request: body.request, message: body.message }
+    }
+    if (response.status === 400) return { status: 'invalid' }
+    if (response.status === 409) return { status: 'conflict' }
+    if (response.status === 413) return { status: 'too-large' }
+    if (response.status === 415) return { status: 'unsupported' }
     if (response.status === 404) return { status: 'not-found' }
     if (response.status === 403) return { status: 'forbidden' }
     return { status: 'error' }

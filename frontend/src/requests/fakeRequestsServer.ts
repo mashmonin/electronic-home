@@ -41,7 +41,7 @@ export interface FakeRequests {
   requests: RequestItem[]
   messages: Record<number, ChatMessage[]>
   /** Makes the next calls of that kind answer with the status (0 means a network failure). */
-  fail: Partial<Record<'list' | 'messages' | 'send' | 'create' | 'download' | 'status', number>>
+  fail: Partial<Record<'list' | 'messages' | 'send' | 'create' | 'download' | 'status' | 'reopen', number>>
   fetchMock: MockInstance<typeof fetch>
   calls: (method: string, pattern: RegExp) => [string, RequestInit | undefined][]
 }
@@ -103,8 +103,12 @@ export function fakeRequests({ requests = [], messages = {}, viewer = { role: 'O
       const refused = failure('list')
       if (refused) return refused
       // like the server: a fragment of the number, in any case, the Latin O being the Cyrillic one; the order is the test's
-      const fragment = new URL(url, 'http://x').searchParams.get('q')?.trim().toUpperCase().replace('O', '\u041E') ?? ''
-      return json({ requests: fake.requests.filter((item) => item.number.includes(fragment)) })
+      const params = new URL(url, 'http://x').searchParams
+      const fragment = params.get('q')?.trim().toUpperCase().replace('O', '\u041E') ?? ''
+      const found = fake.requests.filter((item) => item.number.includes(fragment))
+      // the pages of five, like the server; the order is the test's
+      const page = Number(params.get('page') ?? 1)
+      return json({ requests: found.slice((page - 1) * 5, page * 5), page, page_size: 5, total: found.length })
     }
 
     if (method === 'POST' && url === '/api/requests') {
@@ -128,11 +132,36 @@ export function fakeRequests({ requests = [], messages = {}, viewer = { role: 'O
       const item = fake.requests.find((candidate) => candidate.id === Number(statusUrl[1]))
       if (!item) return new Response(null, { status: 404 })
       const wanted = (JSON.parse(String(init?.body)) as { status: RequestItem['status'] }).status
-      const order: RequestItem['status'][] = ['ACCEPTED', 'IN_PROGRESS', 'DONE', 'CLOSED']
+      const order: RequestItem['status'][] = ['ACCEPTED', 'IN_PROGRESS', 'DONE']
       if (order.indexOf(wanted) !== order.indexOf(item.status) + 1) return new Response(null, { status: 409 })
       item.status = wanted
-      if (wanted === 'CLOSED') item.awaiting_reply = false
+      if (wanted === 'DONE') {
+        const thanks = message(nextId++, 'Благодарим за обращение, заявка выполнена.', {
+          author: { login: 'admin', role: 'ADMIN' },
+          mine: viewer.role === 'ADMIN',
+        })
+        fake.messages[item.id] = [...(fake.messages[item.id] ?? []), thanks]
+        item.last_message = { text: thanks.text, author_role: 'ADMIN' }
+        item.awaiting_reply = false
+      }
       return json(item)
+    }
+
+    const reopenUrl = /^\/api\/requests\/(\d+)\/reopen$/.exec(url)
+    if (reopenUrl && method === 'POST') {
+      const refused = failure('reopen')
+      if (refused) return refused
+      const item = fake.requests.find((candidate) => candidate.id === Number(reopenUrl[1]))
+      if (!item) return new Response(null, { status: 404 })
+      const sent = parseSent(init?.body)
+      if (!sent.text.trim()) return new Response(null, { status: 400 })
+      if (item.status !== 'DONE') return new Response(null, { status: 409 })
+      const reply = message(nextId++, sent.text, { author: { login: viewer.login, role: viewer.role }, mine: true, attachments: attachmentsOf(sent.files) })
+      fake.messages[item.id] = [...(fake.messages[item.id] ?? []), reply]
+      item.status = 'IN_PROGRESS'
+      item.awaiting_reply = true
+      item.last_message = { text: sent.text, author_role: viewer.role }
+      return json({ request: item, message: reply }, 201)
     }
 
     const messagesUrl = /^\/api\/requests\/(\d+)\/messages(\?after=(\d+))?$/.exec(url)

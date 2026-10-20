@@ -194,7 +194,7 @@ describe('the search', () => {
 })
 
 describe('the requests that wait for an answer', () => {
-  it('are marked with a colour, a stripe and a tag, the answered ones are not', async () => {
+  it('are marked with a colour and a stripe but have no tag, the answered ones are not marked', async () => {
     fakeRequests({ requests: OWN.map((item) => ({ ...item })), messages: MESSAGES })
     render(<RequestsTab user={OWNER} search="" />)
     await screen.findByText('О-191026-0003')
@@ -202,8 +202,7 @@ describe('the requests that wait for an answer', () => {
     expect(screen.getByTestId('request-3')).toHaveAttribute('data-awaiting', 'true')
     expect(screen.getByTestId('request-2')).toHaveAttribute('data-awaiting', 'true')
     expect(screen.getByTestId('request-1')).toHaveAttribute('data-awaiting', 'false')
-    expect(screen.getByTestId('request-3').textContent).toContain('Ждёт ответа')
-    expect(screen.getByTestId('request-1').textContent).not.toContain('Ждёт ответа')
+    expect(screen.queryByText('Ждёт ответа')).not.toBeInTheDocument()
     const waiting = screen.getByTestId('request-3') as HTMLElement
     const answered = screen.getByTestId('request-1') as HTMLElement
     expect(waiting.style.background).not.toBe(answered.style.background)
@@ -217,10 +216,11 @@ describe('the requests that wait for an answer', () => {
     render(<RequestsTab user={ADMIN} search="" />)
     await screen.findByText('О-191026-0003')
 
-    expect(screen.getAllByText('Ждёт ответа')).toHaveLength(2)
+    expect(screen.queryByText('Ждёт ответа')).not.toBeInTheDocument()
+    expect(document.querySelectorAll('[data-awaiting="true"]')).toHaveLength(2)
   })
 
-  it('keep the tag when chosen, with a darker background', async () => {
+  it('stay marked when chosen, with a darker background', async () => {
     fakeRequests({ requests: OWN.map((item) => ({ ...item })), messages: MESSAGES })
     render(<RequestsTab user={OWNER} search="" />)
     await screen.findByText('О-191026-0003')
@@ -229,7 +229,7 @@ describe('the requests that wait for an answer', () => {
     fireEvent.click(screen.getByTestId('request-3'))
 
     await screen.findByText('Свежий вопрос', { selector: 'div' })
-    expect(screen.getByTestId('request-3').textContent).toContain('Ждёт ответа')
+    expect(screen.getByTestId('request-3')).toHaveAttribute('data-awaiting', 'true')
     expect((screen.getByTestId('request-3') as HTMLElement).style.background).not.toBe(before)
   })
 
@@ -247,7 +247,6 @@ describe('the requests that wait for an answer', () => {
     server.requests.find((item) => item.id === 3)!.awaiting_reply = false
     await tick()
     await waitFor(() => expect(screen.getByTestId('request-3')).toHaveAttribute('data-awaiting', 'false'))
-    expect(screen.getByTestId('request-3').textContent).not.toContain('Ждёт ответа')
 
     server.requests.find((item) => item.id === 3)!.awaiting_reply = true
     await tick()

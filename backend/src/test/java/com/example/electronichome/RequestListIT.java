@@ -27,7 +27,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-// The order of the list (those that wait for an answer first, the longest waiting on top) and the search by the number.
+// The order of the list (by the status, the earliest created first), its pages of five and the search by the number.
 // The conversations are written straight into the database, so that the times of the messages can be chosen.
 @Testcontainers
 @ActiveProfiles("dev")
@@ -117,93 +117,107 @@ class RequestListIT {
         return "?q=" + URLEncoder.encode(fragment, StandardCharsets.UTF_8);
     }
 
-    // ---- the order
+    // ---- the order and the pages
+
+    /** Sets the status and how many minutes ago the request was created: the order of the list follows them. */
+    private void shape(String number, String status, int createdMinutesAgo) {
+        jdbc.update("UPDATE requests SET status = ?, created_at = now() - make_interval(mins => ?) WHERE number = ?",
+                status, createdMinutesAgo, number);
+    }
+
+    private JsonNode page(String bearer, String query) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/requests" + query))
+                .header("Authorization", bearer).build();
+        HttpResponse<String> response = HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+        return json.readTree(response.body());
+    }
 
     @Test
-    void thoseWithoutAnswerAreOnTopTheLongestWaitingFirst() throws Exception {
+    void theListGoesByTheStatusAcceptedThenInWorkThenDone() throws Exception {
+        conversation("Выполнена", "it-owner1", owner(10));
+        conversation("В работе", "it-owner1", owner(20));
+        conversation("Принята", "it-owner1", owner(30));
+        shape("Выполнена", "DONE", 100);
+        shape("В работе", "IN_PROGRESS", 100);
+        shape("Принята", "ACCEPTED", 100);
+
+        assertThat(numbers(admin, "")).containsExactly("Принята", "В работе", "Выполнена");
+        assertThat(numbers(owner1, "")).containsExactly("Принята", "В работе", "Выполнена");
+    }
+
+    @Test
+    void insideAStatusTheEarliestCreatedComesFirstAndAnAnswerDoesNotMoveARequest() throws Exception {
+        conversation("Новая", "it-owner1", owner(5));
+        conversation("Средняя", "it-owner1", owner(5), administrator(1));
+        conversation("Старая", "it-owner1", owner(5));
+        shape("Новая", "IN_PROGRESS", 10);
+        shape("Средняя", "IN_PROGRESS", 50);
+        shape("Старая", "IN_PROGRESS", 90);
+
+        assertThat(numbers(admin, "")).containsExactly("Старая", "Средняя", "Новая");
+    }
+
+    @Test
+    void theAwaitingFlagFollowsTheLastMessageButDoesNotChangeTheOrder() throws Exception {
         conversation("А", "it-owner1", owner(60));
         conversation("Б", "it-owner1", owner(150), administrator(120));
-        conversation("В", "it-owner1", owner(240));
-
-        assertThat(numbers(admin, "")).containsExactly("В", "А", "Б");
-        assertThat(numbers(owner1, "")).containsExactly("В", "А", "Б");
-    }
-
-    @Test
-    void answeredRequestsGoByTheLastMessageNewestFirst() throws Exception {
-        conversation("А", "it-owner1", owner(200), administrator(90));
-        conversation("Б", "it-owner1", owner(100), administrator(30));
-        conversation("В", "it-owner1", owner(400), administrator(60));
-
-        assertThat(numbers(admin, "")).containsExactly("Б", "В", "А");
-    }
-
-    @Test
-    void anotherMessageOfTheOwnerDoesNotResetTheWaiting() throws Exception {
-        conversation("Д", "it-owner1", owner(300), owner(10));
-        conversation("Е", "it-owner1", owner(200));
-
-        assertThat(numbers(admin, "")).containsExactly("Д", "Е");
-    }
-
-    @Test
-    void theWaitingCountsFromTheFirstMessageAfterTheLastAnswer() throws Exception {
-        conversation("Ж", "it-owner1", owner(400), administrator(300), owner(5));
-        conversation("З", "it-owner1", owner(100));
-
-        assertThat(numbers(admin, "")).containsExactly("З", "Ж");
-    }
-
-    @Test
-    void theAwaitingFlagFollowsTheLastMessage() throws Exception {
-        conversation("А", "it-owner1", owner(60));
-        conversation("Б", "it-owner1", owner(150), administrator(120));
-        conversation("В", "it-owner1", owner(300), administrator(200), owner(100));
+        shape("А", "ACCEPTED", 30);
+        shape("Б", "ACCEPTED", 20);
 
         JsonNode items = list(admin, "");
-        assertThat(items.get(0).get("number").asString()).isEqualTo("В");
+
+        assertThat(items.get(0).get("number").asString()).isEqualTo("А");
         assertThat(items.get(0).get("awaiting_reply").asBoolean()).isTrue();
-        assertThat(items.get(1).get("awaiting_reply").asBoolean()).isTrue();
-        assertThat(items.get(2).get("number").asString()).isEqualTo("Б");
-        assertThat(items.get(2).get("awaiting_reply").asBoolean()).isFalse();
+        assertThat(items.get(1).get("number").asString()).isEqualTo("Б");
+        assertThat(items.get(1).get("awaiting_reply").asBoolean()).isFalse();
     }
 
     @Test
-    void anAnswerTakesARequestOutOfTheTopGroupAndANewQuestionBringsItBack() throws Exception {
-        conversation("А", "it-owner1", owner(60));
-        conversation("Б", "it-owner1", owner(30));
-        assertThat(numbers(admin, "")).containsExactly("А", "Б");
-        long first = jdbc.queryForObject("SELECT id FROM requests WHERE number = 'А'", Long.class);
-
-        post(admin, first, "Ответ администратора");
-        assertThat(numbers(admin, "")).containsExactly("Б", "А");
-
-        post(owner1, first, "Новый вопрос");
-        assertThat(numbers(admin, "")).containsExactly("Б", "А");
-        jdbc.update("UPDATE request_messages SET created_at = now() - interval '10 minutes' WHERE request_id = ? AND body = 'Новый вопрос'", first);
-        jdbc.update("UPDATE requests SET last_message_at = now() - interval '10 minutes' WHERE id = ?", first);
-        assertThat(numbers(admin, "")).containsExactly("Б", "А");
-        assertThat(list(admin, "").get(1).get("awaiting_reply").asBoolean()).isTrue();
-    }
-
-    private void post(String bearer, long id, String text) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/requests/" + id + "/messages"))
-                .header("Authorization", bearer).header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(json.createObjectNode().put("text", text).toString())).build();
-        assertThat(HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(201);
-    }
-
-    @Test
-    void theLimitOf200IsAppliedToTheOrderedList() throws Exception {
-        for (int i = 0; i < 205; i++) {
-            conversation("Н-" + i, "it-owner1", owner(1000 - i));
+    void thePagesHoldFiveRequestsAndTheTotalIsGiven() throws Exception {
+        for (int i = 1; i <= 7; i++) {
+            conversation("З-" + i, "it-owner1", owner(10));
+            shape("З-" + i, "ACCEPTED", 100 - i);
         }
-        conversation("Самая-давняя", "it-owner1", owner(5000));
 
-        List<String> numbers = numbers(admin, "");
+        JsonNode first = page(admin, "");
+        JsonNode second = page(admin, "?page=2");
 
-        assertThat(numbers).hasSize(200);
-        assertThat(numbers.get(0)).isEqualTo("Самая-давняя");
+        assertThat(first.get("page").asInt()).isEqualTo(1);
+        assertThat(first.get("page_size").asInt()).isEqualTo(5);
+        assertThat(first.get("total").asLong()).isEqualTo(7);
+        assertThat(numbers(admin, "")).containsExactly("З-1", "З-2", "З-3", "З-4", "З-5");
+        assertThat(second.get("page").asInt()).isEqualTo(2);
+        assertThat(numbers(admin, "?page=2")).containsExactly("З-6", "З-7");
+        assertThat(second.get("total").asLong()).isEqualTo(7);
+    }
+
+    @Test
+    void aPageBeyondTheEndIsEmptyAndABadPageIsARefusal() throws Exception {
+        conversation("А", "it-owner1", owner(10));
+
+        assertThat(page(admin, "?page=3").get("requests")).isEmpty();
+        assertThat(page(admin, "?page=3").get("total").asLong()).isEqualTo(1);
+        for (String bad : new String[] {"?page=0", "?page=-1", "?page=abc", "?page="}) {
+            HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/requests" + bad))
+                    .header("Authorization", admin).build();
+            assertThat(HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString()).statusCode()).as(bad).isEqualTo(400);
+        }
+    }
+
+    @Test
+    void anOwnerPagesOnlyThroughOwnRequestsAndTheSearchHasItsOwnTotal() throws Exception {
+        for (int i = 1; i <= 6; i++) {
+            conversation("К-" + i, "it-owner1", owner(10));
+            shape("К-" + i, "ACCEPTED", 100 - i);
+        }
+        conversation("Чужая", "it-owner2", owner(10));
+
+        assertThat(page(owner1, "").get("total").asLong()).isEqualTo(6);
+        assertThat(numbers(owner1, "?page=2")).containsExactly("К-6");
+        assertThat(page(admin, "").get("total").asLong()).isEqualTo(7);
+        assertThat(page(admin, q("К-")).get("total").asLong()).isEqualTo(6);
+        assertThat(numbers(admin, q("К-") + "&page=2")).containsExactly("К-6");
     }
 
     // ---- the search
@@ -270,7 +284,7 @@ class RequestListIT {
         conversation("О-191026-0002", "it-owner1", owner(30));
         conversation("О-191026-0003", "it-owner1", owner(90));
 
-        assertThat(numbers(admin, q("191026"))).containsExactly("О-191026-0003", "О-191026-0002", "О-191026-0001");
+        assertThat(numbers(admin, q("191026"))).containsExactly("О-191026-0001", "О-191026-0002", "О-191026-0003");
     }
 
     @Test
