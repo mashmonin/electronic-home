@@ -36,7 +36,7 @@ class HousingTestDataIT {
     @Test
     void devProfileSeedsTestApartmentsWithoutCity() {
         List<String> addresses = jdbc.queryForList(
-                "SELECT street || '|' || house || '|' || apartment FROM addresses ORDER BY apartment", String.class);
+                "SELECT street || '|' || house || '|' || apartment FROM addresses WHERE is_test ORDER BY apartment", String.class);
 
         assertThat(addresses).containsExactly("ул. Тестовая|Тест|1", "ул. Тестовая|Тест|2");
         assertThat(jdbc.queryForList(
@@ -67,7 +67,9 @@ class HousingTestDataIT {
     @Test
     void everySeededRowIsMarkedAsTest() {
         for (String table : List.of("addresses", "accounts", "owners", "address_owners", "account_owners")) {
-            assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table + " WHERE NOT is_test", Integer.class))
+            // the apartments of the house of the tables of the readings are real ones; the test house is "Тест"
+            String realRows = table.equals("addresses") ? " WHERE NOT is_test AND house = 'Тест'" : " WHERE NOT is_test";
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table + realRows, Integer.class))
                     .as(table).isZero();
             assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table, Integer.class))
                     .as(table).isPositive();

@@ -37,3 +37,5 @@ databaseChangeLog:
       file: db/changelog/changes/018-request-status-kind.yaml
   - include:
       file: db/changelog/changes/019-drop-closed-status.yaml
+  - include:
+      file: db/changelog/changes/020-import-readings-2025-2026.yaml

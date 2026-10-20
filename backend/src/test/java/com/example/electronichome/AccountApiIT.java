@@ -43,10 +43,10 @@ class AccountApiIT {
 
     @AfterEach
     void removeExtraRows() {
-        jdbc.update("DELETE FROM water_meters WHERE address_id IN (SELECT id FROM addresses WHERE apartment = '99')");
+        jdbc.update("DELETE FROM water_meters WHERE address_id IN (SELECT id FROM addresses WHERE apartment = '99' AND house = 'Тест')");
         jdbc.update("DELETE FROM account_owners WHERE account_id IN (SELECT id FROM accounts WHERE number = '000000000099')");
         jdbc.update("DELETE FROM accounts WHERE number = '000000000099'");
-        jdbc.update("DELETE FROM addresses WHERE apartment = '99'");
+        jdbc.update("DELETE FROM addresses WHERE apartment = '99' AND house = 'Тест'");
     }
 
     private HttpResponse<String> get(String number, String... headers) throws Exception {

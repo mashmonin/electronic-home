@@ -57,7 +57,7 @@ class RequestsApiIT {
     @BeforeEach
     void users() throws Exception {
         jdbc.update("INSERT INTO addresses (street, house, apartment, is_test) VALUES ('ул. Тестовая', 'Тест', '98', TRUE)");
-        jdbc.update("INSERT INTO accounts (number, address_id, is_test) SELECT ?, id, TRUE FROM addresses WHERE apartment = '98'", ACCOUNT_98);
+        jdbc.update("INSERT INTO accounts (number, address_id, is_test) SELECT ?, id, TRUE FROM addresses WHERE apartment = '98' AND house = 'Тест'", ACCOUNT_98);
         AuthSupport.createUser(jdbc, "it-owner1", "OWNER", true, ACCOUNT_1);
         AuthSupport.createUser(jdbc, "it-owner2", "OWNER", true, ACCOUNT_98);
         AuthSupport.createUser(jdbc, "it-lonely", "OWNER", true);
@@ -75,7 +75,7 @@ class RequestsApiIT {
         jdbc.update("DELETE FROM requests WHERE NOT is_test");
         jdbc.update("DELETE FROM users WHERE login LIKE 'it-%'");
         jdbc.update("DELETE FROM accounts WHERE number = ?", ACCOUNT_98);
-        jdbc.update("DELETE FROM addresses WHERE apartment = '98'");
+        jdbc.update("DELETE FROM addresses WHERE apartment = '98' AND house = 'Тест'");
     }
 
     private HttpResponse<String> call(String method, String path, String bearer, String body) throws Exception {

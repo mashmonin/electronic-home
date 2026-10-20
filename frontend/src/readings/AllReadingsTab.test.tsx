@@ -55,13 +55,13 @@ interface Fake {
   failPeriods: boolean
 }
 
-function fakeServer(): Fake {
+function fakeServer(periods: OverviewPeriod[] = PERIODS): Fake {
   const fake: Fake = { calls: [], failMonth: new Set(), failPeriods: false }
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input)
     fake.calls.push(url)
     if (url === '/api/readings/periods') {
-      return fake.failPeriods ? new Response(null, { status: 500 }) : new Response(JSON.stringify({ periods: PERIODS }))
+      return fake.failPeriods ? new Response(null, { status: 500 }) : new Response(JSON.stringify({ periods }))
     }
     const requested = /^\/api\/readings\?month=(.+)$/.exec(url)
     if (requested) {
@@ -77,6 +77,12 @@ async function open(search = '?tab=all-readings') {
   window.history.replaceState(null, '', `/${search}`)
   render(<MeterReadingsPage user={ADMIN} search={search} />)
   await screen.findByRole('heading', { level: 1, name: 'Все показания' })
+}
+
+// The page with the accordion: all the months are closed until the user opens one.
+async function openOctober(search?: string) {
+  await open(search)
+  fireEvent.click(await screen.findByText('Октябрь'))
 }
 
 const monthHeader = (name: string) => screen.getByText(name)
@@ -105,15 +111,24 @@ describe('the tab "Все показания"', () => {
     expect(window.location.search).toBe('?tab=all-readings')
   })
 
-  it('lists the months newest first and opens the first one', async () => {
+  it('lists the months newest first, all of them closed', async () => {
     const fake = fakeServer()
     await open()
 
-    await screen.findByText('Октябрь 2026')
+    await screen.findByText('Октябрь')
     const headers = Array.from((document.querySelector('.ant-collapse') as HTMLElement).querySelectorAll(':scope > .ant-collapse-item > .ant-collapse-header')).map(
       (node) => node.textContent,
     )
-    expect(headers).toEqual(['Октябрь 2026', 'Сентябрь 2026', 'Август 2026'])
+    expect(headers).toEqual(['Октябрь', 'Сентябрь', 'Август'])
+    expect(document.querySelectorAll('.ant-collapse-item-active')).toHaveLength(0)
+    expect(screen.queryByText('кв. 1')).not.toBeInTheDocument()
+    expect(monthCalls(fake)).toEqual([])
+  })
+
+  it('opens a month by a click and asks for it once', async () => {
+    const fake = fakeServer()
+    await openOctober()
+
     await screen.findByText('кв. 1')
     expect(monthCalls(fake)).toEqual(['/api/readings?month=2026-10'])
   })
@@ -126,31 +141,59 @@ describe('the tab "Все показания"', () => {
     expect(await screen.findByText('Не удалось загрузить показания')).toBeInTheDocument()
     fake.failPeriods = false
     fireEvent.click(screen.getByRole('button', { name: 'Повторить' }))
-    expect(await screen.findByText('Октябрь 2026')).toBeInTheDocument()
+    expect(await screen.findByText('Октябрь')).toBeInTheDocument()
+  })
+})
+
+describe('the years', () => {
+  it('are separated by a divider with the year over its months', async () => {
+    fakeServer([
+      { month: '2026-01', start: '2025-12-26', end: '2026-01-25' },
+      { month: '2025-12', start: '2025-11-26', end: '2025-12-25' },
+      { month: '2025-11', start: '2025-10-26', end: '2025-11-25' },
+    ])
+    await open()
+    await screen.findByText('Январь')
+
+    const dividers = Array.from(document.querySelectorAll('.ant-divider')).map((node) => node.textContent)
+    expect(dividers).toEqual(['2026', '2025'])
+    const groups = Array.from(document.querySelectorAll('.ant-collapse')).filter((node) => !node.closest('.ant-collapse-content'))
+    expect(groups).toHaveLength(2)
+    expect(groups[0].textContent).toContain('Январь')
+    expect(groups[1].textContent).toContain('Декабрь')
+    expect(groups[1].textContent).toContain('Ноябрь')
+  })
+
+  it('have one divider when all the months are of one year', async () => {
+    fakeServer()
+    await open()
+    await screen.findByText('Октябрь')
+
+    expect(Array.from(document.querySelectorAll('.ant-divider')).map((node) => node.textContent)).toEqual(['2026'])
   })
 })
 
 describe('the months', () => {
   it('load when opened, once', async () => {
     const fake = fakeServer()
-    await open()
+    await openOctober()
     await screen.findByText('кв. 1')
 
-    fireEvent.click(monthHeader('Сентябрь 2026'))
+    fireEvent.click(monthHeader('Сентябрь'))
     await waitFor(() => expect(monthCalls(fake)).toHaveLength(2))
     expect(monthCalls(fake)[1]).toBe('/api/readings?month=2026-09')
-    fireEvent.click(monthHeader('Сентябрь 2026'))
-    fireEvent.click(monthHeader('Сентябрь 2026'))
+    fireEvent.click(monthHeader('Сентябрь'))
+    fireEvent.click(monthHeader('Сентябрь'))
 
     expect(monthCalls(fake)).toHaveLength(2)
   })
 
   it('say when a month has no apartments with meters', async () => {
     fakeServer()
-    await open()
+    await openOctober()
     await screen.findByText('кв. 1')
 
-    fireEvent.click(monthHeader('Август 2026'))
+    fireEvent.click(monthHeader('Август'))
 
     expect(await screen.findByText('Нет квартир со счётчиками')).toBeInTheDocument()
   })
@@ -158,7 +201,7 @@ describe('the months', () => {
   it('show an error of their own with a retry', async () => {
     const fake = fakeServer()
     fake.failMonth.add('2026-10')
-    await open()
+    await openOctober()
 
     expect(await screen.findByText('Не удалось загрузить месяц')).toBeInTheDocument()
     fake.failMonth.clear()
@@ -170,7 +213,7 @@ describe('the months', () => {
 describe('the apartments', () => {
   it('are marked as handed in, partly handed in or not handed in', async () => {
     fakeServer()
-    await open()
+    await openOctober()
 
     expect(await screen.findByText('Сдано 2 из 2')).toBeInTheDocument()
     expect(screen.getByText('Сдано 1 из 2')).toBeInTheDocument()
@@ -179,30 +222,39 @@ describe('the apartments', () => {
 
   it('show the table of the meters when opened', async () => {
     fakeServer()
-    await open()
+    await openOctober()
     fireEvent.click(await screen.findByText('кв. 1'))
 
     const row = (await screen.findByText('Тест 1')).closest('tr') as HTMLElement
     expect(within(row).getByText('Горячая')).toBeInTheDocument()
-    expect(within(row).getByText('245.300')).toBeInTheDocument()
-    expect(within(row).getByText('25.09.2026')).toBeInTheDocument()
-    expect(within(row).getByText('15.300')).toBeInTheDocument()
+    expect(within(row).getByText('230')).toBeInTheDocument()
+    expect(within(row).getByText('245.3')).toBeInTheDocument()
+    expect(within(row).getByText('15.3')).toBeInTheDocument()
+    expect(screen.queryByText('Дата')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
+      'Счётчик',
+      'Вода',
+      'Показание, м³',
+      'Предыдущее, м³',
+      'Расход, м³',
+    ])
   })
 
   it('show a dash instead of the consumption of the first reading', async () => {
     fakeServer()
-    await open()
+    await openOctober()
     fireEvent.click(await screen.findByText('кв. 1'))
 
     const row = (await screen.findByText('Тест 2')).closest('tr') as HTMLElement
     expect(within(row).getByText('Холодная')).toBeInTheDocument()
-    expect(within(row).getByText('512.100')).toBeInTheDocument()
-    expect(within(row).getByText('—')).toBeInTheDocument()
+    expect(within(row).getByText('512.1')).toBeInTheDocument()
+    // the first reading has neither a previous value nor a consumption
+    expect(within(row).getAllByText('—')).toHaveLength(2)
   })
 
   it('say "Не передано" in the row of a meter without a reading', async () => {
     fakeServer()
-    await open()
+    await openOctober()
     fireEvent.click(await screen.findByText('кв. 2'))
 
     const row = (await screen.findByText('Б')).closest('tr') as HTMLElement
@@ -214,7 +266,7 @@ describe('the apartments', () => {
 describe('the search by the apartment', () => {
   it('keeps the apartments with the fragment and asks for nothing', async () => {
     const fake = fakeServer()
-    await open()
+    await openOctober()
     await screen.findByText('кв. 10')
     const before = fake.calls.length
 
@@ -228,7 +280,7 @@ describe('the search by the apartment', () => {
 
   it('says that nothing was found and shows everything again when cleared', async () => {
     fakeServer()
-    await open()
+    await openOctober()
     await screen.findByText('кв. 10')
 
     fireEvent.change(screen.getByLabelText('Поиск по квартире'), { target: { value: '77' } })

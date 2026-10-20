@@ -30,10 +30,21 @@ class HousingProdDataIT {
     @Test
     void prodContextCreatesNoTestData() {
         for (String table : List.of("addresses", "accounts", "owners", "address_owners", "account_owners")) {
-            assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table, Integer.class)).as(table).isZero();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table + " WHERE is_test", Integer.class)).as(table).isZero();
             assertThat(jdbc.queryForObject(
                     "SELECT count(*) FROM information_schema.columns WHERE table_name = ? AND column_name = 'is_test'",
                     Integer.class, table)).as(table + ".is_test").isEqualTo(1);
+        }
+    }
+
+    @Test
+    void prodContextHasTheApartmentsOfTheHouseAndNoAccountsOrOwners() {
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM addresses", Integer.class)).isEqualTo(138);
+        assertThat(jdbc.queryForObject(
+                "SELECT count(DISTINCT apartment) FROM addresses WHERE street = 'ул. Тестовая' AND house = 'Дом' AND NOT is_test AND apartment ~ '^[0-9]+$' AND apartment::int BETWEEN 1 AND 138",
+                Integer.class)).isEqualTo(138);
+        for (String table : List.of("accounts", "owners", "address_owners", "account_owners")) {
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table, Integer.class)).as(table).isZero();
         }
     }
 }

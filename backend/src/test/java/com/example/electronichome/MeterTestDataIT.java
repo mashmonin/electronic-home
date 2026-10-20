@@ -32,6 +32,7 @@ class MeterTestDataIT {
         List<Map<String, Object>> meters = jdbc.queryForList("""
                 SELECT m.number, m.water_type, a.street, a.house, a.apartment
                 FROM water_meters m JOIN addresses a ON a.id = m.address_id
+                WHERE m.is_test
                 ORDER BY m.number
                 """);
 
@@ -44,7 +45,7 @@ class MeterTestDataIT {
 
     @Test
     void testMetersHaveVerificationDates() {
-        assertThat(jdbc.queryForList("SELECT number || '|' || verification_date::text FROM water_meters ORDER BY number", String.class))
+        assertThat(jdbc.queryForList("SELECT number || '|' || verification_date::text FROM water_meters WHERE is_test ORDER BY number", String.class))
                 .containsExactly("Тест 1|2028-01-01", "Тест 2|2026-10-17");
     }
 
@@ -60,10 +61,15 @@ class MeterTestDataIT {
 
     @Test
     void everySeededRowIsMarkedAsTest() {
+        // the meters of the test house are all test ones (the real meters of the house of the readings are not)
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM water_meters m JOIN addresses a ON a.id = m.address_id
+                WHERE NOT m.is_test AND a.house = 'Тест'""", Integer.class)).as("water_meters").isZero();
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM meter_readings r JOIN water_meters m ON m.id = r.meter_id JOIN addresses a ON a.id = m.address_id
+                WHERE NOT r.is_test AND a.house = 'Тест'""", Integer.class)).as("meter_readings").isZero();
         for (String table : List.of("water_meters", "meter_readings")) {
-            assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table + " WHERE NOT is_test", Integer.class))
-                    .as(table).isZero();
-            assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table, Integer.class))
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM " + table + " WHERE is_test", Integer.class))
                     .as(table).isPositive();
         }
     }

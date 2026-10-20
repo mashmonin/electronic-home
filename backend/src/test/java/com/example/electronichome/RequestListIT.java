@@ -55,7 +55,7 @@ class RequestListIT {
     void users() throws Exception {
         jdbc.update("DELETE FROM requests WHERE is_test");
         jdbc.update("INSERT INTO addresses (street, house, apartment, is_test) VALUES ('ул. Тестовая', 'Тест', '97', TRUE)");
-        jdbc.update("INSERT INTO accounts (number, address_id, is_test) SELECT '000000000097', id, TRUE FROM addresses WHERE apartment = '97'");
+        jdbc.update("INSERT INTO accounts (number, address_id, is_test) SELECT '000000000097', id, TRUE FROM addresses WHERE apartment = '97' AND house = 'Тест'");
         AuthSupport.createUser(jdbc, "it-owner1", "OWNER", true, ACCOUNT_1);
         AuthSupport.createUser(jdbc, "it-owner2", "OWNER", true, "000000000097");
         AuthSupport.createUser(jdbc, "it-admin-ls", "ADMIN", true);
@@ -69,7 +69,7 @@ class RequestListIT {
         jdbc.update("DELETE FROM requests");
         jdbc.update("DELETE FROM users WHERE login LIKE 'it-%'");
         jdbc.update("DELETE FROM accounts WHERE number = '000000000097'");
-        jdbc.update("DELETE FROM addresses WHERE apartment = '97'");
+        jdbc.update("DELETE FROM addresses WHERE apartment = '97' AND house = 'Тест'");
     }
 
     /** One message of a conversation: who wrote it and how many minutes ago. */

@@ -48,10 +48,11 @@ class MeterVerificationUpgradeIT {
             liquibase.update(new Contexts("dev"), new LabelExpression());
 
             List<String> dates = jdbc.queryForList(
-                    "SELECT number || '|' || verification_date::text FROM water_meters ORDER BY number", String.class);
+                    "SELECT number || '|' || verification_date::text FROM water_meters WHERE is_test ORDER BY number", String.class);
             assertThat(dates).containsExactly("Тест 1|2028-01-01", "Тест 2|2026-10-17");
-            assertThat(jdbc.queryForObject("SELECT count(*) FROM water_meters", Integer.class)).isEqualTo(2);
-            assertThat(jdbc.queryForObject("SELECT count(*) FROM meter_readings", Integer.class)).isEqualTo(4);
+            // the meters and the readings of the house of 2025 and 2026 come with the later migrations and are not test ones
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM water_meters WHERE is_test", Integer.class)).isEqualTo(2);
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM meter_readings WHERE is_test", Integer.class)).isEqualTo(4);
         }
     }
 }

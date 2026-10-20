@@ -87,7 +87,7 @@ class MeterVerificationIT {
     @BeforeEach
     void users() throws Exception {
         jdbc.update("INSERT INTO addresses (street, house, apartment, is_test) VALUES ('ул. Тестовая', 'Тест', '97', TRUE)");
-        jdbc.update("INSERT INTO accounts (number, address_id, is_test) SELECT ?, id, TRUE FROM addresses WHERE apartment = '97'", ACCOUNT_97);
+        jdbc.update("INSERT INTO accounts (number, address_id, is_test) SELECT ?, id, TRUE FROM addresses WHERE apartment = '97' AND house = 'Тест'", ACCOUNT_97);
         AuthSupport.createUser(jdbc, "it-owner1", "OWNER", true, ACCOUNT_1);
         AuthSupport.createUser(jdbc, "it-owner2", "OWNER", true, ACCOUNT_97);
         AuthSupport.createUser(jdbc, "it-resident", "RESIDENT", true, ACCOUNT_1);
@@ -107,7 +107,7 @@ class MeterVerificationIT {
         jdbc.update("DELETE FROM requests WHERE NOT is_test");
         jdbc.update("DELETE FROM users WHERE login LIKE 'it-%'");
         jdbc.update("DELETE FROM accounts WHERE number = ?", ACCOUNT_97);
-        jdbc.update("DELETE FROM addresses WHERE apartment = '97'");
+        jdbc.update("DELETE FROM addresses WHERE apartment = '97' AND house = 'Тест'");
         jdbc.update("UPDATE water_meters SET verification_date = DATE '2028-01-01' WHERE number = 'Тест 1' AND is_test");
         for (String bucket : List.of(actsBucket, attachmentsBucket)) {
             for (String key : keys(bucket)) {

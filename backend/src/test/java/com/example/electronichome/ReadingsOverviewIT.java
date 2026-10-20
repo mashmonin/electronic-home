@@ -111,9 +111,10 @@ class ReadingsOverviewIT {
         return json.readTree(response.body());
     }
 
+    // the apartment of the test house "Тест" (the apartments of the house of the readings have the same numbers)
     private JsonNode apartment(JsonNode month, String apartment) {
         for (JsonNode item : month.get("apartments")) {
-            if (item.get("apartment").asString().equals(apartment)) {
+            if (item.get("apartment").asString().equals(apartment) && item.get("address").asString().contains("д. Тест,")) {
                 return item;
             }
         }
@@ -138,7 +139,9 @@ class ReadingsOverviewIT {
         List<String> months = new ArrayList<>();
         periods.forEach(period -> months.add(period.get("month").asString()));
         // 25 August and 20 August are August, 25 September is September, 26 September and 2 October are October
-        assertThat(months).containsExactly("2026-10", "2026-09", "2026-08");
+        // the readings of 2025 and 2026 of the house come with the migrations: the months run back to January 2025
+        assertThat(months).startsWith("2026-10", "2026-09", "2026-08").endsWith("2025-02", "2025-01");
+        assertThat(months).doesNotHaveDuplicates().isSortedAccordingTo(java.util.Comparator.reverseOrder());
         assertThat(periods.get(0).get("start").asString()).isEqualTo("2026-09-26");
         assertThat(periods.get(0).get("end").asString()).isEqualTo("2026-10-25");
         assertThat(periods.get(1).get("start").asString()).isEqualTo("2026-08-26");
@@ -147,12 +150,19 @@ class ReadingsOverviewIT {
 
     @Test
     void theCurrentPeriodIsThereEvenWithoutReadings() throws Exception {
-        jdbc.update("DELETE FROM meter_readings");
+        // the readings come back after the test: the other tests of the class need the months of 2025 and 2026
+        jdbc.execute("CREATE TABLE readings_backup AS SELECT * FROM meter_readings");
+        try {
+            jdbc.update("DELETE FROM meter_readings");
 
-        JsonNode periods = ok("/api/readings/periods").get("periods");
+            JsonNode periods = ok("/api/readings/periods").get("periods");
 
-        assertThat(periods).hasSize(1);
-        assertThat(periods.get(0).get("month").asString()).isEqualTo("2026-10");
+            assertThat(periods).hasSize(1);
+            assertThat(periods.get(0).get("month").asString()).isEqualTo("2026-10");
+        } finally {
+            jdbc.update("INSERT INTO meter_readings SELECT * FROM readings_backup");
+            jdbc.execute("DROP TABLE readings_backup");
+        }
     }
 
     // ---- the readings of a month
@@ -192,6 +202,41 @@ class ReadingsOverviewIT {
         assertThat(flat.get("submitted").asInt()).isZero();
         assertThat(flat.get("total").asInt()).isEqualTo(1);
         assertThat(meterOf(flat, "N-1").get("reading").isNull()).isTrue();
+    }
+
+    @Test
+    void theApartmentsOfTheHouseOfTheReadingsAreThereWithoutPersonalAccounts() throws Exception {
+        JsonNode october = ok("/api/readings?month=2026-10");
+
+        int houseApartments = 0;
+        for (JsonNode item : october.get("apartments")) {
+            if (item.get("address").asString().contains("д. Дом,")) {
+                houseApartments++;
+                assertThat(item.get("account_number").isNull()).isTrue();
+            }
+        }
+        // the apartments of the house that have meters (some apartments of the sheet have none with readings of 2025 and 2026)
+        int withMeters = jdbc.queryForObject("""
+                SELECT count(DISTINCT a.id) FROM addresses a JOIN water_meters m ON m.address_id = a.id
+                WHERE a.house = 'Дом' AND NOT a.is_test""", Integer.class);
+        assertThat(withMeters).isGreaterThan(100);
+        assertThat(houseApartments).isEqualTo(withMeters);
+        JsonNode first = null;
+        for (JsonNode item : october.get("apartments")) {
+            if (item.get("address").asString().equals("ул. Тестовая, д. Дом, кв. 1")) {
+                first = item;
+            }
+        }
+        assertThat(first).isNotNull();
+        assertThat(first.get("total").asInt()).isEqualTo(4);
+        // not every meter of the house has a reading in October, but the house as a whole has
+        int submitted = 0;
+        for (JsonNode item : october.get("apartments")) {
+            if (item.get("address").asString().contains("д. Дом,")) {
+                submitted += item.get("submitted").asInt();
+            }
+        }
+        assertThat(submitted).isPositive();
     }
 
     @Test

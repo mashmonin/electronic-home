@@ -1,7 +1,7 @@
 import { SearchOutlined } from '@ant-design/icons'
-import { Alert, Button, Collapse, Empty, Flex, Input, Spin, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Collapse, Divider, Empty, Flex, Input, Spin, Table, Tag, Typography } from 'antd'
 import { useEffect, useState } from 'react'
-import { formatReceiptMonth } from './receiptFormat'
+import { NOMINATIVE } from './months'
 import {
   type OverviewApartment,
   type OverviewMeter,
@@ -10,12 +10,17 @@ import {
   fetchOverviewMonth,
   fetchPeriods,
 } from './readingsOverviewApi'
-import { formatVerificationDate } from './verification'
 
 const NOT_HANDED_IN = 'Не передано'
 
-// 245.3 -> "245.300"; the readings have three digits after the point.
-const cubic = (value: number) => value.toFixed(3)
+// 245.3 -> "245.3", 230 -> "230": up to three digits after the point and no fraction when there is none.
+const cubic = (value: number) => String(Number(value.toFixed(3)))
+
+// "2026-10" -> "Октябрь": the year is in the divider over the months.
+function monthName(month: string): string {
+  const name = NOMINATIVE[Number(month.slice(5, 7)) - 1] ?? month
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)}`
+}
 
 const WATER: Record<OverviewMeter['water_type'], string> = { HOT: 'Горячая', COLD: 'Холодная' }
 
@@ -35,9 +40,9 @@ const COLUMNS = [
     render: (_: unknown, meter: OverviewMeter) => (meter.reading ? cubic(meter.reading.value) : <Typography.Text type="danger">{NOT_HANDED_IN}</Typography.Text>),
   },
   {
-    title: 'Дата',
-    key: 'date',
-    render: (_: unknown, meter: OverviewMeter) => (meter.reading ? formatVerificationDate(meter.reading.reading_date) : '—'),
+    title: 'Предыдущее, м³',
+    key: 'previous',
+    render: (_: unknown, meter: OverviewMeter) => (meter.reading && meter.reading.previous_value !== null ? cubic(meter.reading.previous_value) : '—'),
   },
   {
     title: 'Расход, м³',
@@ -90,7 +95,7 @@ function MonthPanel({ month, query }: { month: string; query: string }) {
     <Collapse
       size="small"
       items={found.map((item) => ({
-        key: item.account_number,
+        key: item.address,
         label: (
           <Flex justify="space-between" align="center" gap={8}>
             <Typography.Text strong>{`кв. ${item.apartment}`}</Typography.Text>
@@ -101,6 +106,18 @@ function MonthPanel({ month, query }: { month: string; query: string }) {
       }))}
     />
   )
+}
+
+// The months (newest first) in groups by the year they end in, in the same order: [["2026", [...]], ["2025", [...]]].
+function byYear(periods: OverviewPeriod[]): [string, OverviewPeriod[]][] {
+  const groups: [string, OverviewPeriod[]][] = []
+  for (const period of periods) {
+    const year = period.month.slice(0, 4)
+    const last = groups[groups.length - 1]
+    if (last && last[0] === year) last[1].push(period)
+    else groups.push([year, [period]])
+  }
+  return groups
 }
 
 type Periods = { kind: 'loading' } | { kind: 'ready'; periods: OverviewPeriod[] } | { kind: 'error' }
@@ -153,14 +170,20 @@ export default function AllReadingsTab() {
             value={typed}
             onChange={(event) => setTyped(event.target.value)}
           />
-          <Collapse
-            defaultActiveKey={periods.periods.length > 0 ? [periods.periods[0].month] : []}
-            items={periods.periods.map((period) => ({
-              key: period.month,
-              label: formatReceiptMonth(period.month),
-              children: <MonthPanel month={period.month} query={query} />,
-            }))}
-          />
+          {byYear(periods.periods).map(([year, months]) => (
+            <Flex vertical key={year}>
+              <Divider orientation="left" style={{ margin: '0 0 12px', fontWeight: 600 }}>
+                {year}
+              </Divider>
+              <Collapse
+                items={months.map((period) => ({
+                  key: period.month,
+                  label: monthName(period.month),
+                  children: <MonthPanel month={period.month} query={query} />,
+                }))}
+              />
+            </Flex>
+          ))}
         </>
       )}
     </Flex>

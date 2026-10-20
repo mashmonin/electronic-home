@@ -77,7 +77,7 @@ class ReadingPeriodApiIT {
         jdbc.update("DELETE FROM meter_readings WHERE reading_date >= DATE '2026-09-26'");
         jdbc.update("DELETE FROM water_meters WHERE number LIKE 'Новый%'");
         jdbc.update("DELETE FROM accounts WHERE number = '000000000099'");
-        jdbc.update("DELETE FROM addresses WHERE apartment = '99'");
+        jdbc.update("DELETE FROM addresses WHERE apartment = '99' AND house = 'Тест'");
     }
 
     private JsonNode account() throws Exception {

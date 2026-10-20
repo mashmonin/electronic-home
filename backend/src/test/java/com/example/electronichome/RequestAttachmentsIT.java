@@ -78,7 +78,7 @@ class RequestAttachmentsIT {
     @BeforeEach
     void users() throws Exception {
         jdbc.update("INSERT INTO addresses (street, house, apartment, is_test) VALUES ('ул. Тестовая', 'Тест', '96', TRUE)");
-        jdbc.update("INSERT INTO accounts (number, address_id, is_test) SELECT ?, id, TRUE FROM addresses WHERE apartment = '96'", ACCOUNT_96);
+        jdbc.update("INSERT INTO accounts (number, address_id, is_test) SELECT ?, id, TRUE FROM addresses WHERE apartment = '96' AND house = 'Тест'", ACCOUNT_96);
         AuthSupport.createUser(jdbc, "it-owner1", "OWNER", true, ACCOUNT_1);
         AuthSupport.createUser(jdbc, "it-owner2", "OWNER", true, ACCOUNT_96);
         AuthSupport.createUser(jdbc, "it-resident", "RESIDENT", true, ACCOUNT_1);
@@ -95,7 +95,7 @@ class RequestAttachmentsIT {
         jdbc.update("DELETE FROM requests WHERE NOT is_test");
         jdbc.update("DELETE FROM users WHERE login LIKE 'it-%'");
         jdbc.update("DELETE FROM accounts WHERE number = ?", ACCOUNT_96);
-        jdbc.update("DELETE FROM addresses WHERE apartment = '96'");
+        jdbc.update("DELETE FROM addresses WHERE apartment = '96' AND house = 'Тест'");
         for (String key : keys()) {
             s3.deleteObject(DeleteObjectRequest.builder().bucket(attachmentsBucket).key(key).build());
         }

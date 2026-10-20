@@ -99,7 +99,7 @@ class ReceiptsApiIT {
         clock.set("2026-10-18");
         jdbc.update("DELETE FROM receipts");
         jdbc.update("DELETE FROM accounts WHERE number = ?", OTHER_ACCOUNT);
-        jdbc.update("DELETE FROM addresses WHERE apartment = '98'");
+        jdbc.update("DELETE FROM addresses WHERE apartment = '98' AND house = 'Тест'");
         Long address = jdbc.queryForObject(
                 "INSERT INTO addresses (street, house, apartment) VALUES ('ул. Тестовая', 'Тест', '98') RETURNING id", Long.class);
         jdbc.update("INSERT INTO accounts (number, address_id) VALUES (?, ?)", OTHER_ACCOUNT, address);

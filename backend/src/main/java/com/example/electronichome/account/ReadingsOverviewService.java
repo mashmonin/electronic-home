@@ -67,22 +67,24 @@ class ReadingsOverviewService {
         ReadingsOverviewResponses.Period period = period(month);
         // the last reading of each meter in the period, with the reading before it; the meters of all the apartments
         List<Row> rows = jdbc.sql("""
-                        SELECT a.number AS account_number, ad.street, ad.house, ad.apartment,
+                        SELECT ad.id AS address_id, acc.number AS account_number, ad.street, ad.house, ad.apartment,
                                m.number AS meter_number, m.water_type,
                                r.value, r.reading_date, p.value AS previous_value
-                        FROM accounts a
-                        JOIN addresses ad ON ad.id = a.address_id
+                        FROM addresses ad
                         JOIN water_meters m ON m.address_id = ad.id
+                        -- the personal account is not made for every apartment yet
+                        LEFT JOIN LATERAL (SELECT c.number FROM accounts c WHERE c.address_id = ad.id ORDER BY c.number LIMIT 1) acc ON TRUE
                         LEFT JOIN LATERAL (SELECT x.value, x.reading_date, x.previous_reading_id
                                            FROM meter_readings x
                                            WHERE x.meter_id = m.id AND x.reading_date BETWEEN :start AND :end
                                            ORDER BY x.reading_date DESC, x.id DESC LIMIT 1) r ON TRUE
                         LEFT JOIN meter_readings p ON p.id = r.previous_reading_id
                         ORDER BY NULLIF(regexp_replace(ad.apartment, '\\D', '', 'g'), '')::int NULLS LAST,
-                                 ad.apartment, a.number, m.number""")
+                                 ad.apartment, ad.id, m.number""")
                 .param("start", period.start())
                 .param("end", period.end())
                 .query((rs, row) -> new Row(
+                        rs.getLong("address_id"),
                         rs.getString("account_number"),
                         "%s, д. %s, кв. %s".formatted(rs.getString("street"), rs.getString("house"), rs.getString("apartment")),
                         rs.getString("apartment"),
@@ -93,14 +95,14 @@ class ReadingsOverviewService {
                         rs.getBigDecimal("previous_value")))
                 .list();
 
-        Map<String, List<Row>> byAccount = new LinkedHashMap<>();
-        rows.forEach(row -> byAccount.computeIfAbsent(row.accountNumber(), key -> new ArrayList<>()).add(row));
-        List<ReadingsOverviewResponses.Apartment> apartments = byAccount.values().stream().map(this::apartment).toList();
+        Map<Long, List<Row>> byApartment = new LinkedHashMap<>();
+        rows.forEach(row -> byApartment.computeIfAbsent(row.addressId(), key -> new ArrayList<>()).add(row));
+        List<ReadingsOverviewResponses.Apartment> apartments = byApartment.values().stream().map(this::apartment).toList();
         return new ReadingsOverviewResponses.Month(period.month(), period.start(), period.end(), apartments);
     }
 
     private record Row(
-            String accountNumber, String address, String apartment, String meterNumber, String waterType,
+            long addressId, String accountNumber, String address, String apartment, String meterNumber, String waterType,
             BigDecimal value, LocalDate readingDate, BigDecimal previousValue) {
     }
 

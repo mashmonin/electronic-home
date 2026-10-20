@@ -23,7 +23,8 @@ export interface OverviewMeter {
 }
 
 export interface OverviewApartment {
-  account_number: string
+  /** Null while no personal account is made for the apartment. */
+  account_number: string | null
   apartment: string
   address: string
   submitted: number
