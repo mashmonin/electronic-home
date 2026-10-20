@@ -22,6 +22,7 @@ class ObjectStorageHealthIndicator implements HealthIndicator {
             // asks the storage itself: the buckets that are known from memory would hide a storage that has stopped
             store.check(properties.receiptsBucket());
             store.check(properties.attachmentsBucket());
+            store.check(properties.meterActsBucket());
             return Health.up().build();
         } catch (RuntimeException e) {
             // no address and no text of the error: the settings of prod do not show details anyway

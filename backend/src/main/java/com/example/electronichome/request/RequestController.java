@@ -16,6 +16,7 @@ import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -34,6 +35,9 @@ class RequestController {
     }
 
     record NewMessage(String text) {
+    }
+
+    record NewStatus(String status) {
     }
 
     private final RequestService service;
@@ -71,6 +75,12 @@ class RequestController {
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
     RequestResponses.Item get(Authentication authentication, @PathVariable long id) {
         return service.get(caller(authentication), id);
+    }
+
+    @PutMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    RequestResponses.Item changeStatus(Authentication authentication, @PathVariable long id, @RequestBody NewStatus body) {
+        return service.changeStatus(caller(authentication), id, body.status());
     }
 
     @GetMapping("/{id}/messages")

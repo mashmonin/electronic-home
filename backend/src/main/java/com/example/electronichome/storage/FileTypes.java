@@ -1,17 +1,18 @@
-package com.example.electronichome.request;
+package com.example.electronichome.storage;
 
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
- * Which files may be attached to a message: the extension decides the type that is given to the file, and the beginning
+ * Which files may be uploaded (attached to a message, an act of a verification): the extension decides the type that is given to the file, and the beginning
  * of the file must be what that format begins with. The type the client declares is never used. SVG and HTML are not
  * allowed (they can carry scripts). The check of the beginning is not an antivirus.
  */
-final class AttachmentTypes {
+public final class FileTypes {
 
-    static final int MAX_NAME = 255;
+    public static final int MAX_NAME = 255;
 
     private static final Map<String, String> TYPES = Map.ofEntries(
             Map.entry("jpg", "image/jpeg"),
@@ -34,16 +35,19 @@ final class AttachmentTypes {
     private static final byte[] ZIP = {'P', 'K', 0x03, 0x04};
     private static final byte[] COMPOUND = {(byte) 0xD0, (byte) 0xCF, 0x11, (byte) 0xE0, (byte) 0xA1, (byte) 0xB1, 0x1A, (byte) 0xE1};
 
-    private AttachmentTypes() {
+    /** The extensions of the acts of the verification of a meter: a scan or a photo, a PDF. */
+    public static final Set<String> ACT_EXTENSIONS = Set.of("pdf", "jpg", "jpeg", "png");
+
+    private FileTypes() {
     }
 
     /** The type for the extension (lower case, without the dot), or empty when such files are not allowed. */
-    static Optional<String> contentTypeFor(String extension) {
+    public static Optional<String> contentTypeFor(String extension) {
         return Optional.ofNullable(TYPES.get(extension));
     }
 
     /** The extension of the name in lower case without the dot, or an empty string when there is none. */
-    static String extensionOf(String name) {
+    public static String extensionOf(String name) {
         int dot = name.lastIndexOf('.');
         return dot < 0 || dot == name.length() - 1 ? "" : name.substring(dot + 1).toLowerCase(Locale.ROOT);
     }
@@ -53,7 +57,7 @@ final class AttachmentTypes {
      * {@value #MAX_NAME} characters long (a longer name is cut before its extension, which stays). Null when nothing is
      * left of the name.
      */
-    static String cleanName(String raw) {
+    public static String cleanName(String raw) {
         if (raw == null) {
             return null;
         }
@@ -77,7 +81,7 @@ final class AttachmentTypes {
     }
 
     /** Whether the beginning of the file is that of the format of the extension. */
-    static boolean looksLike(String extension, byte[] head) {
+    public static boolean looksLike(String extension, byte[] head) {
         return switch (extension) {
             case "jpg", "jpeg" -> startsWith(head, JPEG);
             case "png" -> startsWith(head, PNG);

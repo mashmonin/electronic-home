@@ -1,11 +1,12 @@
 import { ArrowLeftOutlined } from '@ant-design/icons'
-import { Alert, Button, Flex, Input, Spin, Typography } from 'antd'
+import { Alert, Button, Flex, Input, Spin, Tag, Typography } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Me } from '../auth/authApi'
 import AttachmentList from './AttachmentList'
 import AttachmentPicker from './AttachmentPicker'
 import { authorLabel, formatTime, ownerLabel } from './format'
-import { type ChatMessage, type RequestItem, type SendResult, fetchMessages, sendMessage } from './requestsApi'
+import { type ChatMessage, type RequestItem, type SendResult, changeRequestStatus, fetchMessages, sendMessage } from './requestsApi'
+import { STATUS_COLORS, STATUS_LABELS, nextStep } from './status'
 import { usePolling } from './usePolling'
 
 export const MESSAGE_LIMIT = 2000
@@ -28,6 +29,7 @@ const SEND_FAILURES: Record<Exclude<SendResult['status'], 'ok'>, string> = {
   unsupported: 'Тип файла не поддерживается',
   'not-found': 'Заявка недоступна',
   forbidden: 'Недостаточно прав',
+  closed: 'Заявка закрыта, писать в неё нельзя',
   invalid: 'Не удалось отправить сообщение. Попробуйте позже',
   error: 'Не удалось отправить сообщение. Попробуйте позже',
 }
@@ -40,8 +42,15 @@ function merge(old: ChatMessage[], added: ChatMessage[]): ChatMessage[] {
 }
 
 // The chat of a request: the header, the messages and, while the request is open, the field to write in.
-export default function ChatPanel({ request, user, narrow, onBack, onActivity }: Props) {
+export default function ChatPanel({ request: listed, user, narrow, onBack, onActivity }: Props) {
   const admin = user.role === 'ADMIN'
+  // the request as the chat knows it: a step of the status shows at once, the list catches up with the next reload
+  const [request, setRequest] = useState(listed)
+  const [stepping, setStepping] = useState(false)
+  const [stepFailure, setStepFailure] = useState<string | null>(null)
+  useEffect(() => setRequest(listed), [listed])
+  const closed = request.status === 'CLOSED'
+  const step = admin ? nextStep(request) : null
   const [messages, setMessages] = useState<Messages>({ kind: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const [text, setText] = useState('')
@@ -91,7 +100,24 @@ export default function ChatPanel({ request, user, narrow, onBack, onActivity }:
 
   const trimmed = text.trim()
   const tooLong = trimmed.length > MESSAGE_LIMIT
-  const canSend = (trimmed.length > 0 || files.length > 0) && !tooLong && !sending
+  const canSend = (trimmed.length > 0 || files.length > 0) && !tooLong && !sending && !closed
+
+  const makeStep = async () => {
+    if (!step || stepping) return
+    setStepping(true)
+    setStepFailure(null)
+    const result = await changeRequestStatus(request.id, step.status)
+    setStepping(false)
+    if (result.status === 'ok') {
+      setRequest(result.request)
+    } else {
+      setStepFailure(
+        result.status === 'conflict' ? 'Статус заявки уже изменён или шаг невозможен' : 'Не удалось изменить статус. Попробуйте позже',
+      )
+    }
+    // after a failure too: the list shows the status the server has
+    onActivity()
+  }
 
   const send = async () => {
     if (!canSend) return
@@ -122,8 +148,17 @@ export default function ChatPanel({ request, user, narrow, onBack, onActivity }:
           <Typography.Text strong style={{ fontSize: 16, flex: 1, minWidth: 0 }} ellipsis>
             {request.number}
           </Typography.Text>
+          <Tag color={STATUS_COLORS[request.status]} style={{ marginInlineEnd: 0 }}>
+            {STATUS_LABELS[request.status]}
+          </Tag>
+          {step && (
+            <Button type="primary" size="small" loading={stepping} onClick={() => void makeStep()}>
+              {step.label}
+            </Button>
+          )}
         </Flex>
         {admin && <Typography.Text type="secondary">{ownerLabel(request)}</Typography.Text>}
+        {stepFailure && <Alert type="error" showIcon message={stepFailure} />}
       </Flex>
 
       <div ref={scroller} data-testid="chat-feed" style={{ flex: 1, overflowY: 'auto', padding: 16, minHeight: 0 }}>
@@ -168,8 +203,10 @@ export default function ChatPanel({ request, user, narrow, onBack, onActivity }:
 
       <div style={{ padding: 16, borderTop: '1px solid #f0f0f0' }}>
         <Flex vertical gap={8}>
+          {closed && <Alert type="info" showIcon message="Заявка закрыта" />}
           {failure && <Alert type="error" showIcon message={failure} />}
           <Input.TextArea
+            disabled={closed}
             aria-label="Сообщение"
             placeholder="Введите сообщение"
             autoSize={{ minRows: 2, maxRows: 6 }}
@@ -184,7 +221,7 @@ export default function ChatPanel({ request, user, narrow, onBack, onActivity }:
             }}
           />
           {tooLong && <Typography.Text type="danger">Сообщение длиннее {MESSAGE_LIMIT} символов</Typography.Text>}
-          <AttachmentPicker files={files} onChange={setFiles} disabled={sending} />
+          <AttachmentPicker files={files} onChange={setFiles} disabled={sending || closed} />
           <Flex justify="flex-end">
             <Button type="primary" disabled={!canSend} loading={sending} onClick={() => void send()}>
               Отправить

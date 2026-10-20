@@ -1,0 +1,180 @@
+databaseChangeLog:
+  - changeSet:
+      id: 017-create-meter-verification-acts
+      author: electronic-home
+      changes:
+        # the acts of the verification of a meter; the content is in the bucket of the acts, here only the record
+        - createTable:
+            tableName: meter_verification_acts
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_meter_verification_acts
+              - column:
+                  name: meter_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_meter_acts_meter
+                    references: water_meters(id)
+                    deleteCascade: true
+              # the key of the object in the bucket of the acts (a UUID made by the server)
+              - column:
+                  name: object_key
+                  type: varchar(36)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_meter_acts_object_key
+              - column:
+                  name: file_name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: content_type
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: size_bytes
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: sha256
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              # the end of the verification period that the act confirms
+              - column:
+                  name: verification_date
+                  type: date
+                  constraints:
+                    nullable: false
+              # the request of the administrator that confirms a draft; the act stays when the request is deleted
+              - column:
+                  name: request_id
+                  type: bigint
+                  constraints:
+                    foreignKeyName: fk_meter_acts_request
+                    references: requests(id)
+              - column:
+                  name: created_by
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_meter_acts_user
+                    references: users(id)
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+              # a draft waits for the confirmation of the administrator and is not shown to the clients
+              - column:
+                  name: is_draft
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              # a replaced act: it stays in the table and in the bucket
+              - column:
+                  name: is_archive
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_test
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: ALTER TABLE meter_verification_acts ADD CONSTRAINT ck_meter_acts_size CHECK (size_bytes > 0)
+        - sql:
+            sql: ALTER TABLE meter_verification_acts ADD CONSTRAINT ck_meter_acts_name CHECK (length(btrim(file_name)) > 0)
+        - sql:
+            sql: ALTER TABLE meter_verification_acts ADD CONSTRAINT ck_meter_acts_state CHECK (NOT (is_draft AND is_archive))
+        # a meter has at most one act in force: not a draft and not archived
+        - sql:
+            sql: CREATE UNIQUE INDEX uq_meter_acts_active ON meter_verification_acts (meter_id) WHERE NOT is_draft AND NOT is_archive
+        - createIndex:
+            tableName: meter_verification_acts
+            indexName: ix_meter_acts_request
+            columns:
+              - column: { name: request_id }
+        # a file that is uploaded and not used yet; the cleaning deletes it after a day
+        - createTable:
+            tableName: meter_act_uploads
+            columns:
+              - column:
+                  name: object_key
+                  type: varchar(36)
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_meter_act_uploads
+              - column:
+                  name: meter_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_meter_act_uploads_meter
+                    references: water_meters(id)
+                    deleteCascade: true
+              - column:
+                  name: user_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_meter_act_uploads_user
+                    references: users(id)
+                    deleteCascade: true
+              - column:
+                  name: file_name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: content_type
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: size_bytes
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: sha256
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: is_test
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: meter_act_uploads
+            indexName: ix_meter_act_uploads_created
+            columns:
+              - column: { name: created_at }
+      rollback:
+        - dropTable:
+            tableName: meter_act_uploads
+        - dropTable:
+            tableName: meter_verification_acts

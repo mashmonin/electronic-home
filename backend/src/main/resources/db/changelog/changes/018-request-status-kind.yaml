@@ -1,0 +1,33 @@
+databaseChangeLog:
+  - changeSet:
+      id: 018-request-status-kind
+      author: electronic-home
+      changes:
+        # the status goes back (015 dropped the old one with other values): ACCEPTED -> IN_PROGRESS -> DONE -> CLOSED
+        - addColumn:
+            tableName: requests
+            columns:
+              - column:
+                  name: status
+                  type: varchar(16)
+                  defaultValue: ACCEPTED
+                  constraints:
+                    nullable: false
+              # GENERAL: written by an owner; VERIFICATION: made by the system when an owner changes the verification date
+              - column:
+                  name: kind
+                  type: varchar(16)
+                  defaultValue: GENERAL
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: ALTER TABLE requests ADD CONSTRAINT ck_requests_status CHECK (status IN ('ACCEPTED', 'IN_PROGRESS', 'DONE', 'CLOSED'))
+        - sql:
+            sql: ALTER TABLE requests ADD CONSTRAINT ck_requests_kind CHECK (kind IN ('GENERAL', 'VERIFICATION'))
+      rollback:
+        - dropColumn:
+            tableName: requests
+            columnName: kind
+        - dropColumn:
+            tableName: requests
+            columnName: status

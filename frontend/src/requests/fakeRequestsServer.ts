@@ -9,6 +9,8 @@ export function request(id: number, number: string, overrides: Partial<RequestIt
   return {
     id,
     number,
+    kind: 'GENERAL',
+    status: 'ACCEPTED',
     awaiting_reply: false,
     created_at: '2026-10-19T09:00:00Z',
     last_message_at: `2026-10-19T10:${String(id % 60).padStart(2, '0')}:00Z`,
@@ -39,7 +41,7 @@ export interface FakeRequests {
   requests: RequestItem[]
   messages: Record<number, ChatMessage[]>
   /** Makes the next calls of that kind answer with the status (0 means a network failure). */
-  fail: Partial<Record<'list' | 'messages' | 'send' | 'create' | 'download', number>>
+  fail: Partial<Record<'list' | 'messages' | 'send' | 'create' | 'download' | 'status', number>>
   fetchMock: MockInstance<typeof fetch>
   calls: (method: string, pattern: RegExp) => [string, RequestInit | undefined][]
 }
@@ -117,6 +119,20 @@ export function fakeRequests({ requests = [], messages = {}, viewer = { role: 'O
       fake.requests.unshift(created)
       fake.messages[created.id] = [message(nextId++, sent.text, { attachments: attachmentsOf(sent.files) })]
       return json(created, 201)
+    }
+
+    const statusUrl = /^\/api\/requests\/(\d+)\/status$/.exec(url)
+    if (statusUrl && method === 'PUT') {
+      const refused = failure('status')
+      if (refused) return refused
+      const item = fake.requests.find((candidate) => candidate.id === Number(statusUrl[1]))
+      if (!item) return new Response(null, { status: 404 })
+      const wanted = (JSON.parse(String(init?.body)) as { status: RequestItem['status'] }).status
+      const order: RequestItem['status'][] = ['ACCEPTED', 'IN_PROGRESS', 'DONE', 'CLOSED']
+      if (order.indexOf(wanted) !== order.indexOf(item.status) + 1) return new Response(null, { status: 409 })
+      item.status = wanted
+      if (wanted === 'CLOSED') item.awaiting_reply = false
+      return json(item)
     }
 
     const messagesUrl = /^\/api\/requests\/(\d+)\/messages(\?after=(\d+))?$/.exec(url)

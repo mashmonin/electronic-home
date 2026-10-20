@@ -31,3 +31,7 @@ databaseChangeLog:
       file: db/changelog/changes/015-drop-request-status.yaml
   - include:
       file: db/changelog/changes/016-create-request-attachments.yaml
+  - include:
+      file: db/changelog/changes/017-create-meter-verification-acts.yaml
+  - include:
+      file: db/changelog/changes/018-request-status-kind.yaml

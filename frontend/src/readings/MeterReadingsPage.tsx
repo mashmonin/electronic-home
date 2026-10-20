@@ -114,7 +114,13 @@ function AccountScreen({
               {meters.length === 0 ? (
                 <Alert type="info" showIcon message="Для этого лицевого счёта счётчики не найдены" />
               ) : (
-                <ReadingsForm key={account.number} accountNumber={account.number} meters={meters} onChanged={refresh} />
+                <ReadingsForm
+                  key={account.number}
+                  accountNumber={account.number}
+                  meters={meters}
+                  onChanged={refresh}
+                  canChangeVerification={user.role !== 'RESIDENT'}
+                />
               )}
               <ContactCard />
             </>

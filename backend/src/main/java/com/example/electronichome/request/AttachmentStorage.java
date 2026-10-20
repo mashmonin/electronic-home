@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.example.electronichome.storage.FileTypes;
 import com.example.electronichome.storage.ObjectKeys;
 import com.example.electronichome.storage.ObjectStore;
 import com.example.electronichome.storage.SpooledUpload;
@@ -69,12 +70,12 @@ class AttachmentStorage {
         try {
             long total = 0;
             for (MultipartFile file : files) {
-                String name = AttachmentTypes.cleanName(file.getOriginalFilename());
+                String name = FileTypes.cleanName(file.getOriginalFilename());
                 if (name == null) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The file has no name");
                 }
-                String extension = AttachmentTypes.extensionOf(name);
-                String contentType = AttachmentTypes.contentTypeFor(extension)
+                String extension = FileTypes.extensionOf(name);
+                String contentType = FileTypes.contentTypeFor(extension)
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "This type of file is not allowed"));
                 SpooledUpload upload = spool(file);
                 prepared.add(new Prepared(upload, name, contentType));
@@ -85,7 +86,7 @@ class AttachmentStorage {
                 if (total > MAX_TOTAL_BYTES) {
                     throw new ResponseStatusException(HttpStatus.CONTENT_TOO_LARGE, "The files are bigger than " + MAX_TOTAL_BYTES + " bytes");
                 }
-                if (!AttachmentTypes.looksLike(extension, upload.head())) {
+                if (!FileTypes.looksLike(extension, upload.head())) {
                     throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "The content is not what the extension says");
                 }
             }

@@ -45,6 +45,11 @@ public class WaterMeterEntity {
     protected WaterMeterEntity() {
     }
 
+    /** Puts a new end of the verification period in force; only the service of the verification calls it. */
+    void changeVerificationDate(LocalDate date) {
+        this.verificationDate = date;
+    }
+
     public LocalDate getVerificationDate() {
         return verificationDate;
     }

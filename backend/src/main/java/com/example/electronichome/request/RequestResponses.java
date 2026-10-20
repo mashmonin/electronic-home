@@ -23,6 +23,8 @@ final class RequestResponses {
     record Item(
             long id,
             String number,
+            String kind,
+            String status,
             @JsonProperty("awaiting_reply") boolean awaitingReply,
             @JsonProperty("created_at") Instant createdAt,
             @JsonProperty("last_message_at") Instant lastMessageAt,

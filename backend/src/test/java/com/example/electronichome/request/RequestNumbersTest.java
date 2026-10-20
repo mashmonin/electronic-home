@@ -23,6 +23,6 @@ class RequestNumbersTest {
     @Test
     void theLetterIsCyrillic() {
         assertThat(RequestNumbers.format(LocalDate.of(2026, 10, 19), 1).codePointAt(0)).isEqualTo(0x041E);
-        assertThat(RequestNumbers.PREFIX.codePointAt(0)).isEqualTo(0x041E);
+        assertThat(RequestKind.GENERAL.letter().codePointAt(0)).isEqualTo(0x041E);
     }
 }

@@ -23,7 +23,7 @@ class RequestRepository {
     }
 
     private static final String ITEM_SELECT = """
-            SELECT r.id, r.number, r.created_at, r.last_message_at,
+            SELECT r.id, r.number, r.kind, r.status, r.created_at, r.last_message_at,
                    a.number AS account_number, ad.apartment, au.login AS author_login,
                    lm.body AS last_body, lm.last_files, lm.last_file_name, lu.role AS last_role
             FROM requests r
@@ -56,8 +56,8 @@ class RequestRepository {
     List<RequestResponses.Item> list(long userId, boolean admin, String fragment) {
         return jdbc.sql(ITEM_SELECT + """
                         WHERE (:admin OR r.author_id = :userId) AND (CAST(:fragment AS varchar) IS NULL OR position(:fragment IN r.number) > 0)
-                        ORDER BY (lu.role = 'OWNER') DESC,
-                                 CASE WHEN lu.role = 'OWNER' THEN lm.waiting_since END ASC,
+                        ORDER BY (lu.role = 'OWNER' AND r.status <> 'CLOSED') DESC,
+                                 CASE WHEN lu.role = 'OWNER' AND r.status <> 'CLOSED' THEN lm.waiting_since END ASC,
                                  r.last_message_at DESC, r.id DESC
                         LIMIT %d""".formatted(MAX_REQUESTS))
                 .param("admin", admin)
@@ -76,6 +76,15 @@ class RequestRepository {
                 .optional();
     }
 
+    /** Moves the request from one status to the next in one statement, so that two callers cannot both pass; false when it was not in {@code from}. */
+    boolean changeStatus(long id, RequestStatus from, RequestStatus to) {
+        return jdbc.sql("UPDATE requests SET status = :to WHERE id = :id AND status = :from")
+                .param("id", id)
+                .param("from", from.name())
+                .param("to", to.name())
+                .update() == 1;
+    }
+
     List<UserAccount> accountsOf(long userId) {
         return jdbc.sql("""
                         SELECT a.id, a.number FROM user_accounts ua JOIN accounts a ON a.id = ua.account_id
@@ -86,10 +95,16 @@ class RequestRepository {
     }
 
     long insertRequest(long accountId, long authorId, String number) {
-        return jdbc.sql("INSERT INTO requests (account_id, author_id, number) VALUES (:account, :author, :number) RETURNING id")
+        return insertRequest(accountId, authorId, number, RequestKind.GENERAL);
+    }
+
+    // the status is the default of the column: ACCEPTED
+    long insertRequest(long accountId, long authorId, String number, RequestKind kind) {
+        return jdbc.sql("INSERT INTO requests (account_id, author_id, number, kind) VALUES (:account, :author, :number, :kind) RETURNING id")
                 .param("account", accountId)
                 .param("author", authorId)
                 .param("number", number)
+                .param("kind", kind.name())
                 .query(Long.class)
                 .single();
     }
@@ -201,7 +216,9 @@ class RequestRepository {
         return new RequestResponses.Item(
                 rs.getLong("id"),
                 rs.getString("number"),
-                "OWNER".equals(rs.getString("last_role")),
+                rs.getString("kind"),
+                rs.getString("status"),
+                "OWNER".equals(rs.getString("last_role")) && !"CLOSED".equals(rs.getString("status")),
                 instant(rs, "created_at"),
                 instant(rs, "last_message_at"),
                 new RequestResponses.LastMessage(preview, rs.getString("last_role")),

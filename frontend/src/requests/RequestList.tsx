@@ -1,6 +1,7 @@
 import { Flex, Tag, Typography } from 'antd'
 import { formatTime, ownerLabel } from './format'
 import type { RequestItem } from './requestsApi'
+import { STATUS_COLORS, STATUS_LABELS } from './status'
 
 interface Props {
   requests: RequestItem[]
@@ -52,6 +53,9 @@ export default function RequestList({ requests, selectedId, showOwner, onSelect 
               <Typography.Text strong ellipsis style={{ flex: 1 }}>
                 {request.number}
               </Typography.Text>
+              <Tag color={STATUS_COLORS[request.status]} style={{ marginInlineEnd: 0 }}>
+                {STATUS_LABELS[request.status]}
+              </Tag>
               {request.awaiting_reply && (
                 <Tag color="orange" style={{ marginInlineEnd: 0 }}>
                   Ждёт ответа

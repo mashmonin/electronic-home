@@ -1,10 +1,17 @@
 import { apiFetch } from '../auth/apiFetch'
 import type { Role } from '../auth/authApi'
 
+export type RequestStatus = 'ACCEPTED' | 'IN_PROGRESS' | 'DONE' | 'CLOSED'
+
+/** GENERAL: written by an owner; VERIFICATION: made by the system when an owner changes the verification date of a meter. */
+export type RequestKind = 'GENERAL' | 'VERIFICATION'
+
 export interface RequestItem {
   id: number
-  /** The name of the request, given by the server: О-ддммгг-NNNN. */
+  /** The name of the request, given by the server: О-ддммгг-NNNN (П-… for a verification). */
   number: string
+  kind: RequestKind
+  status: RequestStatus
   /** True while the last message is the owner's: the administrator has not answered it yet (decided by the server). */
   awaiting_reply: boolean
   created_at: string
@@ -100,7 +107,7 @@ export async function fetchMessages(requestId: number, after?: number): Promise<
 
 export type SendResult =
   | { status: 'ok'; message: ChatMessage }
-  | { status: 'invalid' | 'too-large' | 'unsupported' | 'not-found' | 'forbidden' | 'error' }
+  | { status: 'invalid' | 'too-large' | 'unsupported' | 'not-found' | 'forbidden' | 'closed' | 'error' }
 
 export async function sendMessage(requestId: number, text: string, files: File[] = []): Promise<SendResult> {
   try {
@@ -112,6 +119,29 @@ export async function sendMessage(requestId: number, text: string, files: File[]
     if (response.status === 400) return { status: 'invalid' }
     if (response.status === 413) return { status: 'too-large' }
     if (response.status === 415) return { status: 'unsupported' }
+    if (response.status === 404) return { status: 'not-found' }
+    if (response.status === 403) return { status: 'forbidden' }
+    if (response.status === 409) return { status: 'closed' }
+    return { status: 'error' }
+  } catch {
+    return { status: 'error' }
+  }
+}
+
+export type StatusResult =
+  | { status: 'ok'; request: RequestItem }
+  | { status: 'conflict' | 'not-found' | 'forbidden' | 'error' }
+
+// The administrator moves the request one step forward; the answer is the request with its new status. Never throws.
+export async function changeRequestStatus(requestId: number, status: RequestStatus): Promise<StatusResult> {
+  try {
+    const response = await apiFetch(`/api/requests/${requestId}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+    if (response.ok) return { status: 'ok', request: (await response.json()) as RequestItem }
+    if (response.status === 409) return { status: 'conflict' }
     if (response.status === 404) return { status: 'not-found' }
     if (response.status === 403) return { status: 'forbidden' }
     return { status: 'error' }

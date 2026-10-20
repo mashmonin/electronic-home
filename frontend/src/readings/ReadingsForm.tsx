@@ -1,6 +1,7 @@
 import { Button, Flex, Form, message } from 'antd'
 import { useState } from 'react'
 import MeterCard from './MeterCard'
+import VerificationDateModal from './VerificationDateModal'
 import { submitReadings } from './readingsApi'
 import type { Meter, ReadingServerError, ReadingToSend } from './types'
 import { isFilled, normalizeReading } from './validation'
@@ -15,6 +16,8 @@ interface Props {
   meters: Meter[]
   /** Reloads the account after the server answered; resolves to false when the reload failed. */
   onChanged: () => Promise<boolean>
+  /** The user may change the verification date of the meters (an owner or an administrator, not a resident). */
+  canChangeVerification?: boolean
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -27,10 +30,25 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 type Collected = ReadingToSend & { index: number }
 
-export default function ReadingsForm({ accountNumber, meters, onChanged }: Props) {
+export default function ReadingsForm({ accountNumber, meters, onChanged, canChangeVerification = false }: Props) {
   const [form] = Form.useForm<FormValues>()
   const [messageApi, contextHolder] = message.useMessage()
   const [sending, setSending] = useState(false)
+  const [editing, setEditing] = useState<Meter | null>(null)
+
+  // An owner's change waits for the administrator: the date stays, the number of the request is shown. An administrator's is in force.
+  const verificationChanged = async (result: { applied: boolean; requestNumber: string | null }) => {
+    setEditing(null)
+    if (result.applied) {
+      messageApi.success('Срок проверки изменён')
+      await onChanged()
+    } else {
+      messageApi.success(
+        `Заявка ${result.requestNumber ?? ''} создана. Новая дата проверки вступит в силу после подтверждения администратором`,
+        6,
+      )
+    }
+  }
 
   const initialValues: FormValues = { values: meters.map(() => '') }
   // Everything is submitted for this period: nothing can be sent, so the buttons are disabled.
@@ -110,7 +128,12 @@ export default function ReadingsForm({ accountNumber, meters, onChanged }: Props
       {contextHolder}
       <Flex vertical gap={16}>
         {meters.map((meter, index) => (
-          <MeterCard key={meter.number} index={index} meter={meter} />
+          <MeterCard
+            key={meter.number}
+            index={index}
+            meter={meter}
+            onEditVerification={canChangeVerification ? () => setEditing(meter) : undefined}
+          />
         ))}
       </Flex>
       <Flex gap={20} wrap style={{ marginTop: 24 }}>
@@ -133,6 +156,14 @@ export default function ReadingsForm({ accountNumber, meters, onChanged }: Props
           Сбросить форму
         </Button>
       </Flex>
+      <VerificationDateModal
+        open={editing !== null}
+        accountNumber={accountNumber}
+        meterNumber={editing?.number ?? ''}
+        verificationDate={editing?.verificationDate}
+        onCancel={() => setEditing(null)}
+        onChanged={(result) => void verificationChanged(result)}
+      />
     </Form>
   )
 }

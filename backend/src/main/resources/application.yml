@@ -35,6 +35,7 @@ storage:
     region: ${S3_REGION:us-east-1}
     receipts-bucket: ${S3_RECEIPTS_BUCKET:electronic-home-receipts}
     attachments-bucket: ${S3_ATTACHMENTS_BUCKET:electronic-home-attachments}
+    meter-acts-bucket: ${S3_METER_ACTS_BUCKET:electronic-home-meter-acts}
 
 server:
   port: 8080

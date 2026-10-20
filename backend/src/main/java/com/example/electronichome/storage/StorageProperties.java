@@ -14,6 +14,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param secretKey         the secret key; at least 16 characters, no default in prod
  * @param receiptsBucket    the bucket of the PDF files of the receipts
  * @param attachmentsBucket the bucket of the files attached to the messages of the requests
+ * @param meterActsBucket   the bucket of the acts of the verification of the water meters
  */
 @ConfigurationProperties("storage.s3")
 public record StorageProperties(
@@ -22,7 +23,8 @@ public record StorageProperties(
         String accessKey,
         String secretKey,
         @DefaultValue("electronic-home-receipts") String receiptsBucket,
-        @DefaultValue("electronic-home-attachments") String attachmentsBucket) {
+        @DefaultValue("electronic-home-attachments") String attachmentsBucket,
+        @DefaultValue("electronic-home-meter-acts") String meterActsBucket) {
 
     static final int MIN_SECRET_LENGTH = 16;
     // the keys are written into a JSON file of the storage container, so they must not need escaping
@@ -40,8 +42,8 @@ public record StorageProperties(
                     "storage.s3.secret-key (S3_SECRET_KEY) must be at least " + MIN_SECRET_LENGTH
                             + " characters: letters, digits and - _ . + = / only");
         }
-        if (receiptsBucket.equals(attachmentsBucket)) {
-            throw new IllegalArgumentException("The buckets of the receipts and of the attachments must differ");
+        if (receiptsBucket.equals(attachmentsBucket) || receiptsBucket.equals(meterActsBucket) || attachmentsBucket.equals(meterActsBucket)) {
+            throw new IllegalArgumentException("The buckets of the receipts, of the attachments and of the meter acts must differ");
         }
     }
 }

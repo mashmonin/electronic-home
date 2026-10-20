@@ -53,10 +53,15 @@ class RequestSchemaIT {
     }
 
     @Test
-    void aRequestHasNoStatus() {
-        Integer columns = jdbc.queryForObject(
-                "SELECT count(*) FROM information_schema.columns WHERE table_name = 'requests' AND column_name = 'status'", Integer.class);
-        assertThat(columns).isZero();
+    void aRequestStartsAcceptedAndGeneralAndOnlyTheKnownValuesAreStored() {
+        long id = insertRequest("О-000000-0001");
+        assertThat(jdbc.queryForObject("SELECT status FROM requests WHERE id = ?", String.class, id)).isEqualTo("ACCEPTED");
+        assertThat(jdbc.queryForObject("SELECT kind FROM requests WHERE id = ?", String.class, id)).isEqualTo("GENERAL");
+        assertThatThrownBy(() -> jdbc.update("UPDATE requests SET status = 'OPEN' WHERE id = ?", id))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update("UPDATE requests SET kind = 'OTHER' WHERE id = ?", id))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        jdbc.update("UPDATE requests SET status = 'CLOSED', kind = 'VERIFICATION' WHERE id = ?", id);
     }
 
     @Test

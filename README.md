@@ -81,7 +81,8 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.
   через бэкенд с проверкой прав.
 - **Ключи.** `S3_ACCESS_KEY` и `S3_SECRET_KEY`: в dev заданы для разработки, в prod обязательны (без них приложение не
   стартует), секрет не короче 16 символов. Остальные параметры: `S3_ENDPOINT` (в Compose `http://s3:8333`), `S3_REGION`,
-  `S3_RECEIPTS_BUCKET` (`electronic-home-receipts`), `S3_ATTACHMENTS_BUCKET` (`electronic-home-attachments`). Бакеты создаются
+  `S3_RECEIPTS_BUCKET` (`electronic-home-receipts`), `S3_ATTACHMENTS_BUCKET` (`electronic-home-attachments`),
+  `S3_METER_ACTS_BUCKET` (`electronic-home-meter-acts`, акты проверки счётчиков). Бакеты создаются
   сами при первом обращении.
 - **Состояние.** Входит в `GET /api/actuator/health` (компонент `objectStorage`); при остановленном хранилище здоровье
   `DOWN`, операции с файлами дают `503`, остальные возможности (показания, текст чатов) работают.

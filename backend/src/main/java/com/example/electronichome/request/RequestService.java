@@ -12,7 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * The rules of the requests: an owner works only with his own, an administrator with all of them; nobody closes them. A request of another
+ * The rules of the requests: an owner works only with his own, an administrator with all of them and moves them through the statuses. A request of another
  * owner is as good as missing ({@code 404}), so that the numbers cannot be tried one after another.
  */
 @Service
@@ -31,8 +31,15 @@ class RequestService {
     private final RequestNumbers numbers;
     private final AttachmentStorage attachments;
     private final TransactionTemplate transaction;
+    private final VerificationApplier verifications;
 
-    RequestService(RequestRepository requests, RequestNumbers numbers, AttachmentStorage attachments, PlatformTransactionManager transactions) {
+    RequestService(
+            RequestRepository requests,
+            RequestNumbers numbers,
+            AttachmentStorage attachments,
+            PlatformTransactionManager transactions,
+            VerificationApplier verifications) {
+        this.verifications = verifications;
         this.requests = requests;
         this.numbers = numbers;
         this.attachments = attachments;
@@ -97,7 +104,10 @@ class RequestService {
     RequestResponses.Message addMessage(Caller caller, long requestId, String text, List<MultipartFile> files) {
         List<MultipartFile> parts = AttachmentStorage.realFiles(files);
         String cleanText = optionalText(text, parts.isEmpty());
-        requests.find(requestId, caller.id(), caller.admin()).orElseThrow(this::notFound);
+        RequestResponses.Item request = requests.find(requestId, caller.id(), caller.admin()).orElseThrow(this::notFound);
+        if (RequestStatus.CLOSED.name().equals(request.status())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "The request is closed");
+        }
         List<AttachmentStorage.Stored> stored = attachments.store(parts);
         try {
             return transaction.execute(status -> {
@@ -109,6 +119,32 @@ class RequestService {
             attachments.deleteQuietly(stored);
             throw e;
         }
+    }
+
+    /**
+     * Moves the request one step forward (administrator only, see the controller). The step ACCEPTED to IN_PROGRESS of a
+     * request about a verification also puts the new date of the meter in force, in the same transaction.
+     */
+    @Transactional
+    RequestResponses.Item changeStatus(Caller caller, long id, String status) {
+        RequestStatus wanted;
+        try {
+            wanted = RequestStatus.valueOf(status == null ? "" : status);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown status");
+        }
+        RequestResponses.Item request = requests.find(id, caller.id(), caller.admin()).orElseThrow(this::notFound);
+        RequestStatus current = RequestStatus.valueOf(request.status());
+        if (current.next() != wanted) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "The status moves one step forward only");
+        }
+        if (!requests.changeStatus(id, current, wanted)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "The status has just been changed");
+        }
+        if (wanted == RequestStatus.IN_PROGRESS && RequestKind.VERIFICATION.name().equals(request.kind())) {
+            verifications.apply(id);
+        }
+        return requests.find(id, caller.id(), caller.admin()).orElseThrow();
     }
 
     /** The content of the file attached to a message of the request, or 404 for a request or a file the user cannot see. */

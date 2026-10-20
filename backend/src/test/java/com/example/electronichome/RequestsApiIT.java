@@ -244,7 +244,8 @@ class RequestsApiIT {
         assertThat(item.has("subject")).isFalse();
         assertThat(item.has("is_test")).isFalse();
         assertThat(item.has("author_id")).isFalse();
-        assertThat(item.has("status")).isFalse();
+        assertThat(item.get("status").asString()).isEqualTo("ACCEPTED");
+        assertThat(item.get("kind").asString()).isEqualTo("GENERAL");
         assertThat(item.get("awaiting_reply").asBoolean()).isTrue();
         assertThat(item.get("last_message").get("text").asString()).hasSize(120);
         assertThat(item.get("last_message").get("author_role").asString()).isEqualTo("OWNER");
@@ -288,7 +289,8 @@ class RequestsApiIT {
 
         assertThat(response.statusCode()).isEqualTo(201);
         JsonNode item = body(response);
-        assertThat(item.has("status")).isFalse();
+        assertThat(item.get("status").asString()).isEqualTo("ACCEPTED");
+        assertThat(item.get("kind").asString()).isEqualTo("GENERAL");
         assertThat(item.get("awaiting_reply").asBoolean()).isTrue();
         assertThat(item.get("account").get("number").asString()).isEqualTo(ACCOUNT_1);
         assertThat(item.get("author").get("login").asString()).isEqualTo("it-owner1");
@@ -459,14 +461,13 @@ class RequestsApiIT {
     }
 
     @Test
-    void thereIsNoWayToCloseOrOpenARequest() throws Exception {
+    void aRequestIsNotChangedByPatchAndOnlyAnAdministratorMovesItsStatus() throws Exception {
         long id = create(owner1, "Первое");
 
         assertThat(call("PATCH", "/api/requests/" + id, admin, "{\"status\":\"CLOSED\"}").statusCode()).isEqualTo(405);
-        assertThat(call("PATCH", "/api/requests/" + id, owner1, "{\"status\":\"CLOSED\"}").statusCode()).isIn(403, 405);
-        assertThat(body(call("GET", "/api/requests/" + id, owner1, null)).has("status")).isFalse();
-        assertThat(jdbc.queryForObject(
-                "SELECT count(*) FROM information_schema.columns WHERE table_name = 'requests' AND column_name = 'status'", Integer.class)).isZero();
+        assertThat(call("PUT", "/api/requests/" + id + "/status", owner1, "{\"status\":\"IN_PROGRESS\"}").statusCode()).isEqualTo(403);
+        assertThat(call("PUT", "/api/requests/" + id + "/status", resident, "{\"status\":\"IN_PROGRESS\"}").statusCode()).isEqualTo(403);
+        assertThat(body(call("GET", "/api/requests/" + id, owner1, null)).get("status").asString()).isEqualTo("ACCEPTED");
     }
 
     @Test

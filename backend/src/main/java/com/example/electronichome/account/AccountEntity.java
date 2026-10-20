@@ -41,6 +41,10 @@ public class AccountEntity {
     protected AccountEntity() {
     }
 
+    public Long getId() {
+        return id;
+    }
+
     public String getNumber() {
         return number;
     }

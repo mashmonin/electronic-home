@@ -50,11 +50,13 @@ public final class SeaweedFsTestContainer {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         String receipts = "it-receipts-" + suffix;
         String attachments = "it-attachments-" + suffix;
+        String acts = "it-meter-acts-" + suffix;
         registry.add("storage.s3.endpoint", SeaweedFsTestContainer::endpoint);
         registry.add("storage.s3.access-key", () -> ACCESS_KEY);
         registry.add("storage.s3.secret-key", () -> SECRET_KEY);
         registry.add("storage.s3.receipts-bucket", () -> receipts);
         registry.add("storage.s3.attachments-bucket", () -> attachments);
-        return new String[] {receipts, attachments};
+        registry.add("storage.s3.meter-acts-bucket", () -> acts);
+        return new String[] {receipts, attachments, acts};
     }
 }
