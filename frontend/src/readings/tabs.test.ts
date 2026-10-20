@@ -128,3 +128,22 @@ describe('the selected request', () => {
     expect(window.location.search).toBe('?account=000000000001&tab=receipts')
   })
 })
+
+describe('the tab of the readings of all the apartments', () => {
+  it('is taken from tab=all-readings', () => {
+    expect(tabFromSearch('?tab=all-readings')).toBe('all-readings')
+  })
+
+  it('is open to an administrator only', () => {
+    expect(allowedTab('all-readings', 'ADMIN')).toBe('all-readings')
+    expect(allowedTab('all-readings', 'OWNER')).toBe('readings')
+    expect(allowedTab('all-readings', 'RESIDENT')).toBe('readings')
+  })
+
+  it('is written into the address', () => {
+    writeTab('all-readings')
+    expect(window.location.search).toBe('?tab=all-readings')
+    writeTab('readings')
+    expect(window.location.search).toBe('')
+  })
+})

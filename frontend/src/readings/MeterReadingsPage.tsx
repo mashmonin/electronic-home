@@ -2,6 +2,7 @@ import { Alert, Flex, Grid, Layout, Spin } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import type { Me } from '../auth/authApi'
 import AppHeader from './AppHeader'
+import AllReadingsTab from './AllReadingsTab'
 import ContactCard from './ContactCard'
 import ReadingsForm from './ReadingsForm'
 import ReceiptsTab from './ReceiptsTab'
@@ -144,8 +145,14 @@ function AdminScreen({ user, onSignOut, search }: { user: Me; onSignOut: () => v
     <Layout style={{ minHeight: '100vh' }}>
       <AppHeader account={null} user={user} activeTab={tab} onTabChange={changeTab} onSignOut={onSignOut} />
       <Layout.Content style={{ padding: wide ? '38px 40px' : '24px 16px' }}>
-        <Flex vertical gap={24} style={{ maxWidth: tab === 'requests' ? 1100 : 700, margin: '0 auto' }}>
-          {tab === 'requests' ? <RequestsTab user={user} search={search} /> : <UploadReceiptTab />}
+        <Flex vertical gap={24} style={{ maxWidth: tab === 'requests' ? 1100 : tab === 'all-readings' ? 900 : 700, margin: '0 auto' }}>
+          {tab === 'requests' ? (
+            <RequestsTab user={user} search={search} />
+          ) : tab === 'all-readings' ? (
+            <AllReadingsTab />
+          ) : (
+            <UploadReceiptTab />
+          )}
         </Flex>
       </Layout.Content>
     </Layout>

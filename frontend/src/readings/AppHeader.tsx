@@ -75,6 +75,7 @@ export default function AppHeader({ account, user, activeTab, onTabChange, onSig
             {user.role === 'ADMIN' ? (
               <>
                 <NavItem label="Выставить квитанции" active={activeTab === 'upload'} onClick={() => onTabChange('upload')} />
+                <NavItem label="Все показания" active={activeTab === 'all-readings'} onClick={() => onTabChange('all-readings')} />
                 <NavItem label="Заявки" active={activeTab === 'requests'} onClick={() => onTabChange('requests')} />
               </>
             ) : (
