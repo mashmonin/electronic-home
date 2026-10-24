@@ -39,3 +39,5 @@ databaseChangeLog:
       file: db/changelog/changes/019-drop-closed-status.yaml
   - include:
       file: db/changelog/changes/020-import-readings-2025-2026.yaml
+  - include:
+      file: db/changelog/changes/021-import-owners.yaml

@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 021-import-owners
+      author: electronic-home
+      # personal data: the SQL is made by tools/owners-import into data/ and is not in git; the changeset runs only with this context
+      context: owners-import
+      changes:
+        - sqlFile:
+            path: ${ownersImportFile}
+            splitStatements: false
+            relativeToChangelogFile: false
+      rollback:
+        - sqlFile:
+            path: ${ownersImportRollbackFile}
+            splitStatements: false
+            relativeToChangelogFile: false

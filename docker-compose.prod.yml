@@ -27,6 +27,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       # publishing of receipts is switched off while the token is empty
       RECEIPTS_ADMIN_TOKEN: ${RECEIPTS_ADMIN_TOKEN:-}
+      # one-time import of the owners: SPRING_LIQUIBASE_CONTEXTS=prod,owners-import (see README)
+      SPRING_LIQUIBASE_CONTEXTS: ${LIQUIBASE_CONTEXTS:-prod}
+    volumes:
+      # the SQL of the import made by tools/owners-import (personal data, not in git); read only
+      - ${OWNERS_IMPORT_DIR:-./data/migrations}:/import:ro
     restart: unless-stopped
 
   nginx:

@@ -17,6 +17,10 @@ spring:
       ddl-auto: validate
   liquibase:
     change-log: classpath:db/changelog/db.changelog-master.yaml
+    # the files of the import of the owners (not in git, see tools/owners-import); used only with the Liquibase context owners-import
+    parameters:
+      ownersImportFile: ${OWNERS_IMPORT_FILE:file:/import/021-import-owners.sql}
+      ownersImportRollbackFile: ${OWNERS_IMPORT_ROLLBACK_FILE:file:/import/021-import-owners.rollback.sql}
 
 # The lock of a submitted period is on in every profile; switch it off for testing with READINGS_PERIOD_ENFORCED=false.
 readings:

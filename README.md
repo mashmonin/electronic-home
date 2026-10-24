@@ -160,6 +160,8 @@ INSERT INTO user_accounts (user_id, account_id)
 SELECT u.id, a.id FROM users u, accounts a WHERE u.login = 'ivanov' AND a.number = '000000000001';
 ```
 
+Собственников, лицевые счета и логины из ведомости начислений загружает отдельный скрипт, см. [`tools/owners-import/README.md`](tools/owners-import/README.md): персональные данные и пароли остаются вне git.
+
 ## Заявки
 
 Заявки — это чаты. Вкладка «Заявки» есть у собственника и администратора (у жильца её нет). Слева список заявок, справа
