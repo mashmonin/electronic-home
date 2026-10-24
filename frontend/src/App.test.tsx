@@ -180,7 +180,7 @@ describe('session', () => {
     expect(screen.queryByText('Лицевой счёт № 000000000001')).not.toBeInTheDocument()
   })
 
-  it('shows the login and the role in the profile menu', async () => {
+  it('shows the full name of the owner instead of the login and the role in the profile menu', async () => {
     server('OWNER')
     render(<App />)
     await signIn()
@@ -189,7 +189,8 @@ describe('session', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Профиль' }))
 
     expect(await screen.findByText('Собственник')).toBeInTheDocument()
-    expect(screen.getByText('owner')).toBeInTheDocument()
+    expect(screen.getByText('Тестовый Тест Тестович')).toBeInTheDocument()
+    expect(screen.queryByText('owner')).not.toBeInTheDocument()
   })
 })
 

@@ -84,18 +84,24 @@ describe('MeterReadingsPage', () => {
     expect(screen.queryByRole('button', { name: 'Сменить адрес' })).not.toBeInTheDocument()
   })
 
-  it('lists co-owners in a popover on the profile icon', async () => {
+  it('shows the owners of the account by full name in the profile, one under another, without the login and the co-owners block', async () => {
     await renderPage()
     fireEvent.click(screen.getByRole('button', { name: 'Профиль' }))
-    expect(await screen.findByText('Тестовая Теста Тестовна')).toBeInTheDocument()
-    expect(screen.getByText('Тестовый Тест Тестович')).toBeInTheDocument()
+
+    const first = await screen.findByText('Тестовая Теста Тестовна')
+    const second = screen.getByText('Тестовый Тест Тестович')
+    expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByText('Собственник')).toBeInTheDocument()
+    expect(screen.queryByText('owner')).not.toBeInTheDocument()
+    expect(screen.queryByText('Совладельцы счёта')).not.toBeInTheDocument()
   })
 
-  it('tells when the account has no co-owners', async () => {
+  it('shows the login when the account has no owners, and no message about co-owners', async () => {
     mockAccount({ ...ACCOUNT, owners: [] })
     await renderPage()
     fireEvent.click(screen.getByRole('button', { name: 'Профиль' }))
-    expect(await screen.findByText('Совладельцы не указаны')).toBeInTheDocument()
+    expect(await screen.findByText('Собственник')).toBeInTheDocument()
+    expect(screen.queryByText('Совладельцы не указаны')).not.toBeInTheDocument()
   })
 })
 

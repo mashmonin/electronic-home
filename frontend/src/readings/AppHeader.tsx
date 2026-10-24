@@ -32,24 +32,23 @@ function NavItem({ label, active, onClick }: { label: string; active: boolean; o
 export default function AppHeader({ account, user, activeTab, onTabChange, onSignOut }: Props) {
   const wide = Grid.useBreakpoint().md ?? false
 
+  // An owner is shown by the full names of the owners of the account (one under another), the others and an account without names by the login.
+  const names = user.role === 'OWNER' && account ? account.owners.map((owner) => owner.full_name) : []
+
   const profile = (
     <Flex vertical gap={12}>
       <Flex vertical>
-        <Typography.Text strong>{user.login}</Typography.Text>
+        {names.length > 0 ? (
+          names.map((name) => (
+            <Typography.Text key={name} strong>
+              {name}
+            </Typography.Text>
+          ))
+        ) : (
+          <Typography.Text strong>{user.login}</Typography.Text>
+        )}
         <Typography.Text type="secondary">{ROLE_NAMES[user.role]}</Typography.Text>
       </Flex>
-      {account && (
-        <Flex vertical gap={4}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            Совладельцы счёта
-          </Typography.Text>
-          {account.owners.length === 0 ? (
-            <Typography.Text type="secondary">Совладельцы не указаны</Typography.Text>
-          ) : (
-            account.owners.map((owner) => <Typography.Text key={owner.full_name}>{owner.full_name}</Typography.Text>)
-          )}
-        </Flex>
-      )}
       <Button onClick={onSignOut} icon={<LogoutOutlined />}>
         Выйти
       </Button>
