@@ -1,10 +1,10 @@
-import { ArrowLeftOutlined } from '@ant-design/icons'
-import { Alert, Button, Flex, Input, Spin, Tag, Typography } from 'antd'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowLeftOutlined, CheckCircleOutlined, ArrowRightOutlined } from '@ant-design/icons'
+import { Alert, Button, Flex, Input, Spin, Tag, Tooltip, Typography } from 'antd'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import type { Me } from '../auth/authApi'
 import AttachmentList from './AttachmentList'
 import AttachmentPicker from './AttachmentPicker'
-import { authorLabel, formatTime, ownerLabel } from './format'
+import { authorLabel, dayKey, formatClock, formatDay, ownerLabel } from './format'
 import {
   type ChatMessage,
   type RequestItem,
@@ -186,7 +186,7 @@ export default function ChatPanel({ request: listed, user, narrow, onBack, onAct
 
   return (
     <Flex vertical style={{ height: '100%' }}>
-      <Flex vertical gap={4} style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0' }}>
+      <Flex vertical gap={4} style={{ padding: '8px 16px', borderBottom: '1px solid #f0f0f0' }}>
         <Flex align="center" gap={8} wrap>
           {narrow && (
             <Button type="text" icon={<ArrowLeftOutlined />} onClick={onBack} style={{ padding: 0 }}>
@@ -209,7 +209,17 @@ export default function ChatPanel({ request: listed, user, narrow, onBack, onAct
         {stepFailure && <Alert type="error" showIcon message={stepFailure} />}
       </Flex>
 
-      <div ref={scroller} data-testid="chat-feed" style={{ flex: 1, overflowY: 'auto', padding: 16, minHeight: 0 }}>
+      <div
+        ref={scroller}
+        data-testid="chat-feed"
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: 16,
+          minHeight: 0,
+          background: '#efeae2',
+        }}
+      >
         {messages.kind === 'loading' && <Spin style={{ display: 'block', margin: '40px auto' }} />}
         {messages.kind === 'error' && (
           <Alert
@@ -224,37 +234,80 @@ export default function ChatPanel({ request: listed, user, narrow, onBack, onAct
           />
         )}
         {messages.kind === 'ready' && (
-          <Flex vertical gap={12}>
-            {messages.messages.map((message) => (
-              <Flex key={message.id} vertical align={message.mine ? 'flex-end' : 'flex-start'}>
-                <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-                  {authorLabel(message)} · {formatTime(message.created_at)}
-                </Typography.Text>
-                <div
-                  style={{
-                    maxWidth: '85%',
-                    padding: '8px 12px',
-                    borderRadius: 12,
-                    background: message.mine ? '#fff7e6' : '#f5f5f5',
-                    whiteSpace: 'pre-wrap',
-                    overflowWrap: 'anywhere',
-                  }}
-                >
-                  {message.text}
-                  <AttachmentList requestId={request.id} attachments={message.attachments ?? []} />
-                </div>
-              </Flex>
+          <Flex vertical gap={6}>
+            {messages.messages.map((message, index) => (
+              <Fragment key={message.id}>
+                {(index === 0 || dayKey(messages.messages[index - 1].created_at) !== dayKey(message.created_at)) && (
+                  <Typography.Text
+                    data-testid="day-divider"
+                    style={{
+                      alignSelf: 'center',
+                      margin: '6px 0',
+                      padding: '2px 10px',
+                      borderRadius: 10,
+                      fontSize: 12,
+                      color: '#fff',
+                      background: 'rgba(0, 0, 0, 0.3)',
+                    }}
+                  >
+                    {formatDay(message.created_at)}
+                  </Typography.Text>
+                )}
+                <Flex vertical align={message.mine ? 'flex-end' : 'flex-start'}>
+                  <div
+                    style={{
+                      maxWidth: '85%',
+                      padding: '6px 10px 4px',
+                      borderRadius: 14,
+                      borderBottomRightRadius: message.mine ? 4 : 14,
+                      borderBottomLeftRadius: message.mine ? 14 : 4,
+                      background: message.mine ? '#ffe7ba' : '#fff',
+                      boxShadow: '0 1px 1px rgba(0, 0, 0, 0.12)',
+                      whiteSpace: 'pre-wrap',
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
+                    {!message.mine && (
+                      <Typography.Text
+                        strong
+                        style={{
+                          display: 'block',
+                          fontSize: 13,
+                          color: '#d46b08',
+                        }}
+                      >
+                        {authorLabel(message)}
+                      </Typography.Text>
+                    )}
+                    {message.text}
+                    <AttachmentList requestId={request.id} attachments={message.attachments ?? []} />
+                    <Typography.Text
+                      type="secondary"
+                      style={{
+                        display: 'block',
+                        textAlign: 'right',
+                        fontSize: 11,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {formatClock(message.created_at)}
+                    </Typography.Text>
+                  </div>
+                </Flex>
+              </Fragment>
             ))}
           </Flex>
         )}
       </div>
 
-      <div style={{ padding: 16, borderTop: '1px solid #f0f0f0' }}>
+      <div style={{ padding: '10px 12px', borderTop: '1px solid #f0f0f0' }}>
         <Flex vertical gap={8}>
           {done && !returning && (
             <Alert
               type="info"
               showIcon
+              icon={<CheckCircleOutlined style={{ color: '#fa8c16' }} />}
+              style={{ background: '#fff7e6', border: '1px solid #ffb370', color: '#d46b08' }}
               message="Заявка выполнена"
               action={
                 canReturn ? (
@@ -271,32 +324,49 @@ export default function ChatPanel({ request: listed, user, narrow, onBack, onAct
               type="info"
               showIcon
               message={
-                request.kind === 'VERIFICATION'
-                  ? 'Чтобы писать в чат, подтвердите заявку'
-                  : 'Чтобы писать в чат, возьмите заявку в работу'
+                request.kind === 'VERIFICATION' ? 'Чтобы писать в чат, подтвердите заявку' : 'Чтобы писать в чат, возьмите заявку в работу'
               }
             />
           )}
           {failure && <Alert type="error" showIcon message={failure} />}
-          <Input.TextArea
-            disabled={locked}
-            aria-label="Сообщение"
-            placeholder="Введите сообщение"
-            autoSize={{ minRows: 2, maxRows: 6 }}
-            value={text}
-            status={tooLong ? 'error' : undefined}
-            onChange={(event) => setText(event.target.value)}
-            onKeyDown={(event) => {
-              if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                event.preventDefault()
-                void send()
-              }
-            }}
-          />
           {tooLong && <Typography.Text type="danger">Сообщение длиннее {MESSAGE_LIMIT} символов</Typography.Text>}
-          <AttachmentPicker files={files} onChange={setFiles} disabled={sending || locked} />
-          <Flex justify="flex-end" gap={8}>
-            {returning && (
+          <AttachmentPicker variant="icon" files={files} onChange={setFiles} disabled={sending || locked}>
+            <Input.TextArea
+              disabled={locked}
+              aria-label="Сообщение"
+              placeholder="Сообщение"
+              autoSize={{ minRows: 1, maxRows: 6 }}
+              value={text}
+              status={tooLong ? 'error' : undefined}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                borderRadius: 18,
+                padding: '8px 14px',
+              }}
+              onChange={(event) => setText(event.target.value)}
+              onKeyDown={(event) => {
+                if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                  event.preventDefault()
+                  void send()
+                }
+              }}
+            />
+            <Tooltip title={returning ? 'Вернуть в работу' : 'Отправить'}>
+              <Button
+                type="primary"
+                shape="circle"
+                size="large"
+                aria-label={returning ? 'Вернуть в работу' : 'Отправить'}
+                icon={<ArrowRightOutlined />}
+                disabled={!canSend}
+                loading={sending}
+                onClick={() => void send()}
+              />
+            </Tooltip>
+          </AttachmentPicker>
+          {returning && (
+            <Flex justify="flex-end">
               <Button
                 disabled={sending}
                 onClick={() => {
@@ -306,11 +376,8 @@ export default function ChatPanel({ request: listed, user, narrow, onBack, onAct
               >
                 Отмена
               </Button>
-            )}
-            <Button type="primary" disabled={!canSend} loading={sending} onClick={() => void send()}>
-              {returning ? 'Вернуть в работу' : 'Отправить'}
-            </Button>
-          </Flex>
+            </Flex>
+          )}
         </Flex>
       </div>
     </Flex>

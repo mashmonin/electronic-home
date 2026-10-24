@@ -44,8 +44,9 @@ describe('the messages', () => {
 
     const feed = screen.getByTestId('chat-feed')
     expect(feed.textContent).toMatch(/Подтекает кран.*Мастер придёт завтра.*Спасибо!/)
-    expect(screen.getAllByText(/^Вы · /)).toHaveLength(2)
-    expect(screen.getByText(/^Администрация · /)).toBeInTheDocument()
+    // the own messages are not signed, the foreign ones are
+    expect(screen.queryByText(/^Вы/)).not.toBeInTheDocument()
+    expect(screen.getByText('Администрация')).toBeInTheDocument()
     expect(screen.getAllByText(/\d{2}\.\d{2}, \d{2}:\d{2}/).length).toBeGreaterThan(0)
   })
 
@@ -57,8 +58,8 @@ describe('the messages', () => {
     ]
     await openChat(ADMIN, server)
 
-    expect(screen.getByText(/^owner · /)).toBeInTheDocument()
-    expect(screen.getByText(/^Вы · /)).toBeInTheDocument()
+    expect(screen.getByTestId('chat-feed')).toHaveTextContent('owner')
+    expect(screen.queryByText(/^Вы/)).not.toBeInTheDocument()
     // in the list and in the header of the chat
     expect(screen.getAllByText('кв. 1 · owner')).toHaveLength(2)
   })
@@ -76,7 +77,33 @@ describe('the messages', () => {
   })
 })
 
+describe('the days', () => {
+  it('are small dividers in the feed, the messages carry only the time', async () => {
+    const server = fakeRequests({ ...conversation(), viewer: { role: 'OWNER', login: 'owner' } })
+    server.messages[1] = [
+      message(11, 'Подтекает кран', NEAR('2026-10-19T10:00:00Z')),
+      message(12, 'Ещё раз', NEAR('2026-10-19T10:05:00Z')),
+      message(13, 'Спасибо!', NEAR('2026-10-21T10:00:00Z')),
+    ]
+    await openChat(OWNER, server)
+
+    // one divider for 19.10 and one for 21.10, none between the messages of the same day
+    expect(screen.getAllByTestId('day-divider')).toHaveLength(2)
+    expect(screen.getByTestId('chat-feed').textContent).not.toMatch(/\d{2}\.\d{2}, \d{2}:\d{2}/)
+  })
+})
+
 describe('sending', () => {
+  it('has the paper clip and the arrow as icons, without the texts of the buttons', async () => {
+    await openChat()
+
+    const clip = screen.getByRole('button', { name: 'Прикрепить файл' })
+    expect(clip).toHaveTextContent('')
+    expect(sendButton()).toHaveTextContent('')
+    expect(clip.querySelector('.anticon-paper-clip')).not.toBeNull()
+    expect(sendButton().querySelector('.anticon-arrow-right')).not.toBeNull()
+  })
+
   it('puts the message into the feed, empties the field and reloads the list', async () => {
     const server = await openChat()
     const listCalls = server.calls('GET', /^\/api\/requests(\?|$)/).length

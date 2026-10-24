@@ -1,5 +1,5 @@
 import { CloseOutlined, PaperClipOutlined } from '@ant-design/icons'
-import { Alert, Button, Flex, Typography } from 'antd'
+import { Alert, Button, Flex, Tooltip, Typography } from 'antd'
 import { useRef, useState } from 'react'
 import { ACCEPT, addFiles, formatSize } from './attachments'
 
@@ -7,10 +7,13 @@ interface Props {
   files: File[]
   onChange: (files: File[]) => void
   disabled?: boolean
+  /** "button" is the text button over the list; "icon" is the round paper clip in a row with the children (the field and the send button). */
+  variant?: 'button' | 'icon'
+  children?: React.ReactNode
 }
 
-// The button "Прикрепить файл" and the list of the chosen files; the files that do not fit are left out with the reason.
-export default function AttachmentPicker({ files, onChange, disabled = false }: Props) {
+// The button (or the paper clip) "Прикрепить файл" and the list of the chosen files; the files that do not fit are left out with the reason.
+export default function AttachmentPicker({ files, onChange, disabled = false, variant = 'button', children }: Props) {
   const input = useRef<HTMLInputElement>(null)
   const [problems, setProblems] = useState<string[]>([])
 
@@ -30,11 +33,13 @@ export default function AttachmentPicker({ files, onChange, disabled = false }: 
   return (
     <Flex vertical gap={8}>
       <input ref={input} type="file" multiple hidden accept={ACCEPT} data-testid="attachment-input" onChange={choose} />
-      <div>
-        <Button icon={<PaperClipOutlined />} disabled={disabled} onClick={() => input.current?.click()}>
-          Прикрепить файл
-        </Button>
-      </div>
+      {variant === 'button' && (
+        <div>
+          <Button icon={<PaperClipOutlined />} disabled={disabled} onClick={() => input.current?.click()}>
+            Прикрепить файл
+          </Button>
+        </div>
+      )}
       {problems.map((problem) => (
         <Alert key={problem} type="warning" showIcon message={problem} />
       ))}
@@ -58,6 +63,22 @@ export default function AttachmentPicker({ files, onChange, disabled = false }: 
               />
             </Flex>
           ))}
+        </Flex>
+      )}
+      {variant === 'icon' && (
+        <Flex align="flex-end" gap={8}>
+          <Tooltip title="Прикрепить файл">
+            <Button
+              type="text"
+              shape="circle"
+              size="large"
+              aria-label="Прикрепить файл"
+              icon={<PaperClipOutlined style={{ fontSize: 20, color: '#8c8c8c' }} />}
+              disabled={disabled}
+              onClick={() => input.current?.click()}
+            />
+          </Tooltip>
+          {children}
         </Flex>
       )}
     </Flex>

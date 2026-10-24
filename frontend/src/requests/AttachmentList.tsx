@@ -52,7 +52,7 @@ export default function AttachmentList({ requestId, attachments }: Props) {
               void download(attachment)
             }
           }}
-          style={{ cursor: 'pointer', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: 8, background: '#fff' }}
+          style={{ cursor: 'pointer', padding: '4px 8px', borderRadius: 8, background: 'rgba(0, 0, 0, 0.05)' }}
         >
           {loading === attachment.id ? <LoadingOutlined /> : iconOf(attachment.content_type)}
           <Typography.Text ellipsis style={{ flex: 1, minWidth: 0 }}>

@@ -1,11 +1,12 @@
 import { SearchOutlined } from '@ant-design/icons'
-import { Alert, Button, Empty, Flex, Grid, Input, Pagination, Spin, Typography } from 'antd'
+import { Alert, Button, Empty, Flex, Grid, Input, Spin, Typography } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import type { Me } from '../auth/authApi'
 import { requestFromSearch, writeRequest } from '../readings/tabs'
 import ChatPanel from './ChatPanel'
 import NewRequestModal from './NewRequestModal'
 import RequestList from './RequestList'
+import RequestPages from './RequestPages'
 import { type RequestItem, fetchRequests } from './requestsApi'
 import { usePolling } from './usePolling'
 
@@ -172,17 +173,9 @@ export default function RequestsTab({ user, search = window.location.search }: P
                 <RequestList requests={requests} selectedId={selected?.id ?? null} showOwner={admin} onSelect={select} />
               )}
             </div>
-            {list.kind === 'ready' && list.total > list.pageSize && (
+            {list.kind === 'ready' && (
               <Flex justify="center" style={{ padding: 8, borderTop: '1px solid #f0f0f0' }}>
-                <Pagination
-                  size="small"
-                  simple
-                  current={page}
-                  total={list.total}
-                  pageSize={list.pageSize}
-                  showSizeChanger={false}
-                  onChange={setPage}
-                />
+                <RequestPages page={page} pages={Math.max(Math.ceil(list.total / list.pageSize), 1)} onChange={setPage} />
               </Flex>
             )}
           </Flex>

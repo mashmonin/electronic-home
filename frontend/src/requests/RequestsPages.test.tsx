@@ -16,6 +16,8 @@ afterEach(() => {
 const many = (n: number) => Array.from({ length: n }, (_, index) => request(index + 1, `О-191026-${String(index + 1).padStart(4, '0')}`))
 const numbersOnScreen = () => Array.from(document.querySelectorAll('[data-testid^="request-"]')).map((row) => row.querySelector('strong')?.textContent)
 
+const pager = () => Array.from(screen.getByRole('navigation', { name: 'Страницы заявок' }).querySelectorAll('button')).map((button) => button.textContent)
+
 describe('the pages of the list', () => {
   it('show five requests and the pager when there are more', async () => {
     fakeRequests({ requests: many(7) })
@@ -24,16 +26,38 @@ describe('the pages of the list', () => {
     await screen.findByText('О-191026-0001')
 
     expect(numbersOnScreen()).toEqual(['О-191026-0001', 'О-191026-0002', 'О-191026-0003', 'О-191026-0004', 'О-191026-0005'])
-    expect(document.querySelector('.ant-pagination')).not.toBeNull()
+    expect(pager()).toEqual(['1', '2'])
   })
 
-  it('have no pager when everything fits on a page', async () => {
+  it('show the numbers 1, 1 2, 1 2 3 and 1 2 3 … by the count of the pages', async () => {
+    for (const [count, expected] of [[3, ['1']], [7, ['1', '2']], [12, ['1', '2', '3']], [16, ['1', '2', '3', '…']]] as const) {
+      fakeRequests({ requests: many(count) })
+      const { unmount } = render(<RequestsTab user={OWNER} search="" />)
+      await screen.findByText('О-191026-0001')
+      expect(pager()).toEqual(expected)
+      unmount()
+    }
+  })
+
+  it('open the page beyond the shown ones by the dots', async () => {
+    const server = fakeRequests({ requests: many(20) })
+    render(<RequestsTab user={OWNER} search="" />)
+    await screen.findByText('О-191026-0001')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Следующие страницы' }))
+
+    await screen.findByText('О-191026-0016')
+    expect(server.calls('GET', /page=4/)).toHaveLength(1)
+    expect(pager()).toEqual(['…', '2', '3', '4'])
+  })
+
+  it('have the number 1 when everything fits on a page', async () => {
     fakeRequests({ requests: many(5) })
     render(<RequestsTab user={OWNER} search="" />)
 
     await screen.findByText('О-191026-0001')
 
-    expect(document.querySelector('.ant-pagination')).toBeNull()
+    expect(pager()).toEqual(['1'])
   })
 
   it('ask the server for the next page and show it', async () => {
@@ -41,7 +65,7 @@ describe('the pages of the list', () => {
     render(<RequestsTab user={OWNER} search="" />)
     await screen.findByText('О-191026-0001')
 
-    fireEvent.click(document.querySelector('.ant-pagination-next') as HTMLElement)
+    fireEvent.click(screen.getByRole('button', { name: '2' }))
 
     await screen.findByText('О-191026-0006')
     expect(numbersOnScreen()).toEqual(['О-191026-0006', 'О-191026-0007'])
@@ -52,7 +76,7 @@ describe('the pages of the list', () => {
     const server = fakeRequests({ requests: many(12) })
     render(<RequestsTab user={OWNER} search="" />)
     await screen.findByText('О-191026-0001')
-    fireEvent.click(document.querySelector('.ant-pagination-next') as HTMLElement)
+    fireEvent.click(screen.getByRole('button', { name: '2' }))
     await screen.findByText('О-191026-0006')
 
     fireEvent.change(screen.getByLabelText('Поиск по номеру'), { target: { value: '19' } })
