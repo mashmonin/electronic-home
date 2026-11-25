@@ -15,7 +15,7 @@
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
-- Приложение: https://localhost (самоподписанный сертификат — браузер предупредит, это нормально).
+- Приложение: https://localhost:8443, http://localhost:8081 перенаправляет на него (самоподписанный сертификат — браузер предупредит, это нормально).
 - Фронтенд работает через Vite с HMR: правки в `frontend/` подхватываются без пересборки.
 - Бэкенд работает в профиле `dev`; после правок в `backend/`: `... up -d --build backend`.
 - PostgreSQL доступен только с localhost: `127.0.0.1:5435` (БД/пользователь/пароль: `electronic_home`).
@@ -105,7 +105,7 @@ PDF до 5 МБ и, по желанию, обе суммы. Список ква�
 входа администратора публикация выключена, `403`):
 
 ```bash
-curl -X PUT https://localhost/api/accounts/000000000001/receipts/2026-10 \
+curl -X PUT https://localhost:8443/api/accounts/000000000001/receipts/2026-10 \
   -H 'X-Admin-Token: dev-admin-token' -H 'Content-Type: application/pdf' \
   --data-binary @receipt.pdf
 ```
@@ -114,7 +114,7 @@ curl -X PUT https://localhost/api/accounts/000000000001/receipts/2026-10 \
 параметрами `capital_repair` и `utilities` (оба или ни одного, число с точкой, не более двух знаков после запятой):
 
 ```bash
-curl -X PUT 'https://localhost/api/accounts/000000000001/receipts/2026-10?capital_repair=1842.50&utilities=6318.27' \\
+curl -X PUT 'https://localhost:8443/api/accounts/000000000001/receipts/2026-10?capital_repair=1842.50&utilities=6318.27' \\
   -H 'X-Admin-Token: dev-admin-token' -H 'Content-Type: application/pdf' --data-binary @receipt.pdf
 ```
 
