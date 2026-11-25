@@ -13,7 +13,7 @@ public class DevCorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOrigins("http://localhost:5173", "https://localhost")
+                .allowedOrigins("http://localhost:5173", "https://localhost", "https://localhost:8443")
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS");
     }
 }
