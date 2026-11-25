@@ -1,5 +1,7 @@
 package com.example.electronichome.storage;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.regex.Pattern;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -15,6 +17,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param receiptsBucket    the bucket of the PDF files of the receipts
  * @param attachmentsBucket the bucket of the files attached to the messages of the requests
  * @param meterActsBucket   the bucket of the acts of the verification of the water meters
+ * @param statementsBucket  the bucket of the uploaded statements of the charges (the sheets the receipts are made from)
  */
 @ConfigurationProperties("storage.s3")
 public record StorageProperties(
@@ -24,7 +27,8 @@ public record StorageProperties(
         String secretKey,
         @DefaultValue("electronic-home-receipts") String receiptsBucket,
         @DefaultValue("electronic-home-attachments") String attachmentsBucket,
-        @DefaultValue("electronic-home-meter-acts") String meterActsBucket) {
+        @DefaultValue("electronic-home-meter-acts") String meterActsBucket,
+        @DefaultValue("electronic-home-statements") String statementsBucket) {
 
     static final int MIN_SECRET_LENGTH = 16;
     // the keys are written into a JSON file of the storage container, so they must not need escaping
@@ -42,8 +46,8 @@ public record StorageProperties(
                     "storage.s3.secret-key (S3_SECRET_KEY) must be at least " + MIN_SECRET_LENGTH
                             + " characters: letters, digits and - _ . + = / only");
         }
-        if (receiptsBucket.equals(attachmentsBucket) || receiptsBucket.equals(meterActsBucket) || attachmentsBucket.equals(meterActsBucket)) {
-            throw new IllegalArgumentException("The buckets of the receipts, of the attachments and of the meter acts must differ");
+        if (new HashSet<>(List.of(receiptsBucket, attachmentsBucket, meterActsBucket, statementsBucket)).size() < 4) {
+            throw new IllegalArgumentException("The buckets of the receipts, of the attachments, of the meter acts and of the statements must differ");
         }
     }
 }

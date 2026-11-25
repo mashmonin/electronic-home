@@ -28,6 +28,9 @@ dependencies {
     implementation(platform("software.amazon.awssdk:bom:2.56.0"))
     implementation("software.amazon.awssdk:s3")
     implementation("software.amazon.awssdk:apache-client")
+    // reads the .xls statements of the charges and makes the PDF of the receipts
+    implementation("org.apache.poi:poi:5.4.1")
+    implementation("com.github.librepdf:openpdf:2.0.3")
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")

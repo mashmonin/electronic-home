@@ -79,7 +79,8 @@ function pickMonth(text: string) {
 }
 
 function pickFile(file: File) {
-  const input = document.querySelector('input[type="file"]') as HTMLInputElement
+  // the card of the statement has a file input too; the one of the form of an apartment is the last
+  const input = Array.from(document.querySelectorAll('input[type="file"]')).at(-1) as HTMLInputElement
   fireEvent.change(input, { target: { files: [file] } })
 }
 

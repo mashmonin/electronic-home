@@ -8,8 +8,8 @@ spring:
     name: electronic-home
   servlet:
     multipart:
-      # the files of a message: 10 MB each, 25 MB together (the service checks the real sizes too)
-      max-file-size: 10MB
+      # the files of a message: 10 MB each, 25 MB together; a statement of the charges up to 20 MB (the services check the real sizes too)
+      max-file-size: 20MB
       max-request-size: 26MB
   jpa:
     open-in-view: false
@@ -40,6 +40,7 @@ storage:
     receipts-bucket: ${S3_RECEIPTS_BUCKET:electronic-home-receipts}
     attachments-bucket: ${S3_ATTACHMENTS_BUCKET:electronic-home-attachments}
     meter-acts-bucket: ${S3_METER_ACTS_BUCKET:electronic-home-meter-acts}
+    statements-bucket: ${S3_STATEMENTS_BUCKET:electronic-home-statements}
 
 server:
   port: 8080

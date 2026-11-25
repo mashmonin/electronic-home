@@ -33,6 +33,7 @@ class ReceiptService {
     // an amount in roubles: digits, optionally a dot and one or two digits; no sign, no exponent, fits numeric(12,2)
     private static final Pattern AMOUNT = Pattern.compile("\\d{1,10}(\\.\\d{1,2})?");
     static final String SOURCE_MANUAL = "MANUAL";
+    static final String SOURCE_PARSED = "PARSED";
 
     /** The result of a publication: what to answer and whether the receipt was new. */
     record Result(ReceiptResponses.Published body, boolean created) {
@@ -75,6 +76,25 @@ class ReceiptService {
         AccountEntity account = accounts.findByNumber(accountNumber)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 
+        return store(account, month, periodMonth, content, amounts, SOURCE_MANUAL);
+    }
+
+    /**
+     * Publishes a receipt that the system made from a statement of the charges: the same storing and replacing as
+     * {@link #publish}, with both amounts and the source {@code PARSED}. The month is not checked against today (the
+     * caller did it for the whole statement).
+     */
+    @Transactional
+    Result publishGenerated(String accountNumber, YearMonth month, BigDecimal capitalRepair, BigDecimal utilities, InputStream content)
+            throws IOException {
+        AccountEntity account = accounts.findByNumber(accountNumber)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        return store(account, month.toString(), month.atDay(1), content, new BigDecimal[] {capitalRepair, utilities}, SOURCE_PARSED);
+    }
+
+    // Stores the file first, then saves the record (replacing the receipt of the month if there is one).
+    private Result store(AccountEntity account, String month, LocalDate periodMonth, InputStream content, BigDecimal[] amounts, String source)
+            throws IOException {
         ReceiptStorage.Stored stored;
         try {
             stored = storage.save(content, properties.maxSize().toBytes());
@@ -85,7 +105,7 @@ class ReceiptService {
         }
         deleteOnRollback(stored.key());
 
-        Optional<ReceiptEntity> existing = receipts.lockByAccountNumberAndPeriodMonth(accountNumber, periodMonth);
+        Optional<ReceiptEntity> existing = receipts.lockByAccountNumberAndPeriodMonth(account.getNumber(), periodMonth);
         String replacedKey = existing.map(ReceiptEntity::getFileKey).orElse(null);
         ReceiptEntity receipt = existing.orElseGet(() -> new ReceiptEntity(account, periodMonth));
         Instant now = Instant.now(clock);
@@ -93,7 +113,7 @@ class ReceiptService {
         if (amounts == null) {
             receipt.clearAmounts();
         } else {
-            receipt.setAmounts(amounts[0], amounts[1], SOURCE_MANUAL, now);
+            receipt.setAmounts(amounts[0], amounts[1], source, now);
         }
         receipts.saveAndFlush(receipt);
         if (replacedKey != null) {

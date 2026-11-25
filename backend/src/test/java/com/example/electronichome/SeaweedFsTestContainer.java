@@ -51,12 +51,14 @@ public final class SeaweedFsTestContainer {
         String receipts = "it-receipts-" + suffix;
         String attachments = "it-attachments-" + suffix;
         String acts = "it-meter-acts-" + suffix;
+        String statements = "it-statements-" + suffix;
         registry.add("storage.s3.endpoint", SeaweedFsTestContainer::endpoint);
         registry.add("storage.s3.access-key", () -> ACCESS_KEY);
         registry.add("storage.s3.secret-key", () -> SECRET_KEY);
         registry.add("storage.s3.receipts-bucket", () -> receipts);
         registry.add("storage.s3.attachments-bucket", () -> attachments);
         registry.add("storage.s3.meter-acts-bucket", () -> acts);
-        return new String[] {receipts, attachments, acts};
+        registry.add("storage.s3.statements-bucket", () -> statements);
+        return new String[] {receipts, attachments, acts, statements};
     }
 }

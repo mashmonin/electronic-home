@@ -1,0 +1,149 @@
+databaseChangeLog:
+  - changeSet:
+      id: 022-create-receipt-batches
+      author: electronic-home
+      changes:
+        # a batch is one uploaded statement of the charges and the making of the receipts from it; no personal data in these tables
+        - createTable:
+            tableName: receipt_batches
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_receipt_batches
+              # the first day of the month of the statement
+              - column:
+                  name: period_month
+                  type: date
+                  constraints:
+                    nullable: false
+              # the key of the statement in the bucket of the statements (a UUID made by the server)
+              - column:
+                  name: source_key
+                  type: varchar(36)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_receipt_batches_source_key
+              - column:
+                  name: size_bytes
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: sha256
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: varchar(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: total
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: processed
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: replaced
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: skipped
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: failed
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              # why the whole batch failed (a short text without personal data)
+              - column:
+                  name: error
+                  type: varchar(255)
+              - column:
+                  name: created_by
+                  type: bigint
+                  constraints:
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: finished_at
+                  type: timestamptz
+        - sql:
+            sql: ALTER TABLE receipt_batches ADD CONSTRAINT fk_receipt_batches_user FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL
+        - sql:
+            sql: ALTER TABLE receipt_batches ADD CONSTRAINT ck_receipt_batches_status CHECK (status IN ('QUEUED', 'RUNNING', 'DONE', 'FAILED'))
+        - sql:
+            sql: ALTER TABLE receipt_batches ADD CONSTRAINT ck_receipt_batches_counts CHECK (total >= 0 AND processed >= 0 AND created >= 0 AND replaced >= 0 AND skipped >= 0 AND failed >= 0)
+        - createTable:
+            tableName: receipt_batch_items
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_receipt_batch_items
+              - column:
+                  name: batch_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_receipt_batch_items_batch
+                    references: receipt_batches(id)
+                    deleteCascade: true
+              # the number of the account as the statement has it (it may be one that is not in the database)
+              - column:
+                  name: account_number
+                  type: varchar(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: varchar(16)
+                  constraints:
+                    nullable: false
+              # the code of the reason of a skip or a failure
+              - column:
+                  name: reason
+                  type: varchar(32)
+        - sql:
+            sql: ALTER TABLE receipt_batch_items ADD CONSTRAINT ck_receipt_batch_items_status CHECK (status IN ('CREATED', 'REPLACED', 'SKIPPED', 'FAILED'))
+        - createIndex:
+            tableName: receipt_batch_items
+            indexName: idx_receipt_batch_items_batch
+            columns:
+              - column:
+                  name: batch_id
+      rollback:
+        - dropTable:
+            tableName: receipt_batch_items
+        - dropTable:
+            tableName: receipt_batches

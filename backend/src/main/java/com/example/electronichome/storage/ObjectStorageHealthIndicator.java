@@ -23,6 +23,7 @@ class ObjectStorageHealthIndicator implements HealthIndicator {
             store.check(properties.receiptsBucket());
             store.check(properties.attachmentsBucket());
             store.check(properties.meterActsBucket());
+            store.check(properties.statementsBucket());
             return Health.up().build();
         } catch (RuntimeException e) {
             // no address and no text of the error: the settings of prod do not show details anyway

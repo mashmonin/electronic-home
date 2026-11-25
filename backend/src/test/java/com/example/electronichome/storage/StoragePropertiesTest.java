@@ -19,7 +19,7 @@ class StoragePropertiesTest {
     }
 
     private static StorageProperties with(String endpoint, String access, String secret, String receipts, String attachments) {
-        return new StorageProperties(endpoint, "us-east-1", access, secret, receipts, attachments, "acts");
+        return new StorageProperties(endpoint, "us-east-1", access, secret, receipts, attachments, "acts", "statements");
     }
 
     @Test
