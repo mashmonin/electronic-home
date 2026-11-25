@@ -44,6 +44,7 @@ bin/
 ### Project ###
 node_modules/
 frontend/dist/
+*.tsbuildinfo
 .env
 .env.*
 !.env.example
