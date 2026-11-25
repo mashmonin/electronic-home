@@ -1,6 +1,10 @@
 # Base services shared by dev and prod. Always combine with an environment file:
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d
+# The fixed project name groups all containers under one "electronic-home" group in Docker Desktop,
+# regardless of the directory name.
+name: electronic-home
+
 services:
   postgres:
     image: postgres:16
